@@ -1,9 +1,11 @@
+library(gtools)
 library(scales)
 library(viridis)
 library(npden)
 library(ks)
 library(compositions)
 
+# Dirichlet mixture parameters
 dirichletmix <- function(u, h, pr) {
   m = length(pr)
   u = matrix(u, nr = m)
@@ -16,6 +18,8 @@ dirichletmix <- function(u, h, pr) {
   mix
 }
 
+# generate random data from Dirichlet mixture distribution
+# threshold2zero: if value is less than threshold, let it be 0 
 rdirichletmix <- function(n, mix, threshold2zero = NULL) {
   m = attr(mix, 'components')
   i = sample.int(m, n, prob = mix$pr, replace = TRUE)
@@ -40,6 +44,8 @@ rdirichletmix <- function(n, mix, threshold2zero = NULL) {
   data
 }
 
+
+# density of Dirichlet mixture distribution
 ddirichletmix <- function(x, mix) {
   D = ncol(x)
   if (ncol(x) + 1 == ncol(mix$alpha)) {
@@ -108,39 +114,45 @@ chaconmix <- function(testno) {
   mix
 }
 
+# alr and ilr transformation
 transformData <- function(x, type) {
   D = ncol(x)
   if (type == 'alr') # alr transformation
     x = log(x[,-D]/x[,D]) 
   else if (type == 'ilr') { # ilr transformation
     logx = log(x)
-    cumx = t(apply(logx[,-D], 1, cumsum))
+    if (is.vector(logx[,-D])) cumx = cumsum(logx[,-D])
+    else cumx = t(apply(logx[,-D], 1, cumsum))
     j = 1:(D-1)
     x = (cumx - logx[,-1] %*% diag(j)) %*% diag(sqrt(1/(j*(j+1)))) 
     # - ilr(x[i,]), wrong results in dmvnorm.mixt ??
+    # x = -1 * x # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   }
   x
 }
 
 rmvnormix <- function(n, mix) UseMethod("rmvnormix", mix)
 
-# generate data from chacon mixture
+# generate random data from chacon mixture
 rmvnormix.default <- function(n, mix) {
   ilrx = rmvnorm.mixt(n, mix$mus, mix$Sigmas, props = mix$pr)
   x = -1 * ilrInv(ilrx)
+  # x = ilrInv(ilrx) # multiple -1 or not ?
   alrx = transformData(x, 'alr')
   attr(x, 'ilrcoord') = ilrx
   attr(x, 'alrcoord') = alrx
   x
 }
 
+# generate random data from ilr transformed normal mixture
 rmvnormix.ilrmix <- function(n, mix) {
   ilrx = rmvnmix(n, mix)
-  x = -1 * ilrInv(ilrx) # multiple -1 or not ?
+  x =  ilrInv(ilrx) # multiple -1 or not ?
   attr(x, 'ilrcoord') = ilrx
   x
 }
 
+# generate random data from alr transformed normal mixture
 rmvnormix.alrmix <- function(n, mix) {
   alrx = rmvnmix(n, mix)
   x = alrInv(alrx)
@@ -172,6 +184,31 @@ dmixS <- function(x, mix, tf, tfback = T) { # calculate density value
   dx
 }
 
+simplexpanel <- function() {
+  sidel = 2/sqrt(3)
+  liml = 0.1
+  labl = 0.06
+  plot.new()
+  plot.window(xlim = c(-liml,sidel+liml), ylim = c(-liml,1+liml), 
+              xaxs = 'i', yaxs = 'i', asp = 1)
+  
+  text(sidel/2, 1+labl, expression(x[1]))
+  text(-labl/sidel, -labl/2, expression(x[2]))
+  text(sidel+labl/sidel, -labl/2, expression(x[3]))
+  segments(0, 0, sidel, 0)
+  segments(0, 0, sidel/2, 1)
+  segments(sidel/2, 1, sidel, 0)
+  
+  margin = 0.04
+  gap = c(5,10,25,50,75,90,95)/100; temp = gap/sqrt(3)
+  segments(temp, gap, sidel-temp, gap, lty = 'dotted', col = 'grey')
+  segments(temp, gap, 2*temp, 0, lty = 'dotted', col = 'grey')
+  segments(sidel-temp, gap, sidel-2*temp, 0, lty = 'dotted', col = 'grey')
+  text(temp-margin, gap, gap*100, cex = 0.6)
+  text(sidel-temp+margin, gap, (1-gap)*100, cex = 0.6)
+  text(2*temp, -margin, (1-gap)*100, cex = 0.6)
+}
+
 # plot normal density on real space
 contourR <- function(mix, data = NULL, x1 = c(-3,3), x2 = c(-3,3), nlev = 15) {
   x1 = seq(x1[1], x1[2], l = 100)
@@ -186,10 +223,10 @@ contourR <- function(mix, data = NULL, x1 = c(-3,3), x2 = c(-3,3), nlev = 15) {
 
 # (Logistic) normal density on simplex
 contourS <- function(mix, data = NULL, tfback = T, nlev = 15) {
-  x1 = seq(0, 2/3*sqrt(3), l = 100)
+  x1 = seq(0, 2/sqrt(3), l = 100)
   x2 = seq(0, 1, l = 100)
   x = as.matrix(expand.grid(x1, x2))
-  x = cbind((sqrt(3) * x[,1] - x[,2]) * 0.5, x[,2])
+  x = cbind(x[,2], 1 - (sqrt(3) * x[,1] + x[,2])/2)
   
   if (class(mix)[1] == 'dirichletmix') d = ddirichletmix(x, mix)
   else {
@@ -198,16 +235,12 @@ contourS <- function(mix, data = NULL, tfback = T, nlev = 15) {
   }
   dm <- matrix(d, nrow = length(x1),ncol = length(x2))
   
-  plot.new()
-  plot.window(xlim = c(0,2/3*sqrt(3)), ylim = c(0,1), xaxs = 'i', yaxs = 'i', asp = 1)
+  simplexpanel()
   contour(x1, x2, dm, levels = seq(0, max(d), l = nlev + 1),
           xlab = "x", ylab = "y", col = viridis(nlev), add = T)
-  segments(0, 0, 2/3*sqrt(3), 0)
-  segments(0, 0, sqrt(3)/3, 1)
-  segments(sqrt(3)/3, 1, 2/3*sqrt(3), 0)
-  title(main = ifelse(tfback == T, 'Logistic Normal model', 'Normal model'))
+  # title(main = ifelse(tfback == T, 'Logistic Normal model', 'Normal model'))
   if (!is.null(data)) {
-    data = cbind((data[,1]*2 + data[,2])/sqrt(3), data[,2])
+    data = cbind((data[,3]*2 + data[,1])/sqrt(3), data[,1])
     points(data, col = 'red', cex = 0.5)
   }
 }
@@ -215,7 +248,7 @@ contourS <- function(mix, data = NULL, tfback = T, nlev = 15) {
 ISE <- function(tmix, emix) UseMethod("ISE", emix)
 
 ISE.ilrmix <- function(tmix, emix) {
-  n = 10000
+  n = 100000
   i = sample.int(2, n, prob = c(0.5,0.5), replace = TRUE)
   data1 = rmvnormix(sum(i==1), tmix)
   data2 = rmvnormix(sum(i==2), emix)
@@ -227,17 +260,17 @@ ISE.ilrmix <- function(tmix, emix) {
   
   f1 = dmvnormix(ilrdata, tmix)
   f2 = dmvnormix(ilrdata, emix)
-  ISER = mean((f1 - f2)^2/(f1/2 + f2/2))
   
   f1 = f1/jacob
   f2 = f2/jacob
   ISES = mean((f1 - f2)^2/(f1/2 + f2/2))
   
-  list('ISER' = ISER, 'ISES' = ISES)
+  #list('ISER' = ISER, 'ISES' = ISES)
+  ISES
 }
 
 ISE.alrmix <- function(tmix, emix) {
-  n = 10000
+  n = 100000
   i = sample.int(2, n, prob = c(0.5,0.5), replace = TRUE)
   data1 = rmvnormix(sum(i==1), tmix)
   data2 = rmvnormix(sum(i==2), emix)
@@ -268,50 +301,70 @@ testchacon <- function(i, n, plot = 1) {
   
   if (plot == 1 || plot == 2) {
     if (plot == 1) data = ilrdata = alrdata = NULL # no points in plot
-    par(mfrow=c(2,2))
+    
+    par(mfrow=c(2,2), mar=c(2.5,2.5,1,0.5))
     contourR(mix, ilrdata)
     contourR(imodel$mix, ilrdata)
     contourR(amodel$mix, alrdata)
     par(mfrow=c(1,1))
     
-    par(mfrow=c(2,2))
+    par(mfrow=c(2,2), mar=rep(0,4))
     contourS(mix, data)
     contourS(imodel$mix, data)
     contourS(amodel$mix, data)
     par(mfrow=c(1,1))
-    
-    par(mfrow=c(2,2))
+
+    par(mfrow=c(2,2), mar=rep(0,4))
     contourS(mix, data, tfback = F)
     contourS(imodel$mix, data, tfback = F)
     contourS(amodel$mix, data, tfback = F)
     par(mfrow=c(1,1))
   }
   
-  list('ilr' = ISE(mix, imodel$mix), 'alr' = ISE(mix, imodel$mix))
+  list('ilr' = ISE(mix, imodel$mix), 'alr' = ISE(mix, amodel$mix))
 }
 
-testchacon(1, 100, plot = 1)
-
-
-
+testchacon(9, 100, plot = 2)
 
 mode = rbind(c(0.001,0.998,0.001))
 h = 0.3
 pr = 1
 mix = dirichletmix(u = mode, h = h, pr = pr)
-data = rdirichletmix(500, mix, threshold2zero = 0.01)
-# r = which(data == 0, arr.ind = T)[,1]
+data = rdirichletmix(500, mix)
+r = which(data == 0, arr.ind = T)[,1]
 contourS(mix, data)
 
 ilrdata = transformData(data, 'ilr')
 alrdata = transformData(data, 'alr')
+# ilrdata1 = ilrdata[-r,]
 imodel = mmde(ilrdata); class(imodel$mix) = c('ilrmix', class(imodel$mix))
 amodel = mmde(alrdata); class(amodel$mix) = c('alrmix', class(amodel$mix))
 
 
 
+# n = 250
+# B = 10
+# iseresult = list()
+# for (j in 1:12) {
+#   r = matrix(nr = B, nc = 2)
+#   colnames(r) = c('ilr','alr')
+#   for (i in 1:B) {
+#     print(c(j, i))
+#     ISEvalue = testchacon(j, n, plot = 0)
+#     r[i, 'ilr'] = ISEvalue$ilr
+#     r[i, 'alr'] = ISEvalue$alr
+#   }
+#   iseresult[[j]] = r
+# }
 
-
+# 
+# ISEresult = read.csv('output.csv')
+# ISElist = split(ISEresult, ISEresult$mixture)
+# par(mfrow=c(4,3))
+# for (i in ISElist) {
+#   boxplot(i[,-3])
+# }
+# par(mfrow=c(1,1))
 
 # alrdata = transformData(iInv_data, 'alr')
 # alrmus = alr(-1*ilrInv(mix$mus))
