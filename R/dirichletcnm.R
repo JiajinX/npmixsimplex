@@ -33,7 +33,7 @@ initial_dirichletmix <- function(data, h, by) {
       lf <- min(lf[lf > 0])
       pts[k, ] <- tmu + lf * update
     }
-    d2 = colSums((t(tdata)[, index, drop = FALSE] - pts[k, ])^2)
+    d2 <- colSums((t(tdata)[, index, drop = FALSE] - pts[k, ])^2)
   }
   tmu <- if (k == 1) tmu else rbind(tmu, pts[1:(k - 1), , drop = FALSE])
   # Set tmu as center of cluster
@@ -43,7 +43,7 @@ initial_dirichletmix <- function(data, h, by) {
   imu <- apply(d2mu, 1, which.min)
   nj <- tabulate(imu, nbins = k)
   pr <- nj / sum(nj) # Calculate pr by distance of data points and tmu
-  j = pr != 0
+  j <- pr != 0
   emu <- sin(tmu[j, , drop = FALSE] * side + asin(sqrt(1 / a0)))^2
   emu <- emu / rowSums(emu) # emu should > 1 / a0
   mode <- (emu * a0 - 1) * h
@@ -334,7 +334,7 @@ CNM <- function(np, mix, data, w, by = 1, maxbt = 50) {
 
 # Merge the similar components and drop tiny components (collapse_points)
 # prec: threshold of merge and drop
-unique.dirichletmix = function(mix, prec = 0) {
+unique.dirichletmix <- function(mix, prec = 0) {
   if (nrow(mix$alpha) == 1) return(mix)
   prec <- rep(prec, len = 2)
   # prec[1] for difference in each pair of support points, prec[2] for pr
@@ -355,7 +355,7 @@ unique.dirichletmix = function(mix, prec = 0) {
     ind <- which(i) # Indexes of points need to be merged
     pr2 <- pr[ind] + pr[ind + 1]
     a[ind, ] <- (a[ind, , drop = FALSE] * pr[ind] +
-                    a[ind + 1, , drop = FALSE] * pr[ind + 1]) / pr2
+                   a[ind + 1, , drop = FALSE] * pr[ind + 1]) / pr2
     # Collapse neighboring pairs to the first
     pr[ind] <- pr2
     a <- a[-(ind + 1), , drop = FALSE]

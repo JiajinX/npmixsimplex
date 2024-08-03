@@ -64,14 +64,16 @@ points.simplex <- function(data, lab = NULL, size = 1, right = FALSE,
                            add = FALSE, col = 2, pch = 1, cex = 0.5) {
   if (!add) {
     if (is.null(lab)) {
-      lab = list(expression(x[1]), expression(x[2]), expression(x[3]))
+      lab <- list(expression(x[1]), expression(x[2]), expression(x[3]))
     }
     simplexpanel(lab, right = right)
   }
   if (is.vector(data)) data <- t(data)
   if (!right) {
     data <- cbind((2 - 2 * data[, 2] - data[, 1]) / sqrt(3), data[, 1]) / size
-  } else data <- data[, 1:2, drop = FALSE] / size
+  } else {
+    data <- data[, 1:2, drop = FALSE] / size
+  }
   points(data, col = col, pch = pch, cex = cex)
 }
 
@@ -86,12 +88,12 @@ plot.dirichletmix <- function(mix, data = NULL,
                               type = c("both", "mode", "contour", "null"),
                               x1 = 2, x2 = 3, right = FALSE,
                               lv = NULL, plev = NULL, axl = 100) {
-  if (!identical(intersect(x1,x2), numeric(0)))
+  if (!identical(intersect(x1, x2), numeric(0)))
     stop("Duplicate variables in x1 and x2")
   D <- ncol(mix$alpha)
   if (length(c(x1, x2)) >= D)
     stop("The number of variables in x1 and x2 is greater than the provided")
-  type = match.arg(type)
+  type <- match.arg(type)
   xD <- seq_len(D)
   x3 <- setdiff(xD, c(x1, x2))
   lab1 <- paste(x1, collapse = ",")
@@ -122,7 +124,6 @@ plot.dirichletmix <- function(mix, data = NULL,
     i <- rowSums(x >= 0) == 3
 
     a <- mix$alpha
-    a0 <- sum(a[1, ])
     sa <- t(rowsum(t(a), group))
     if (!right) sa <- sa[, c(3, 1, 2)]
     smix <- dirichletmix(sa, pr = mix$pr) # Marginal distribution
@@ -164,10 +165,12 @@ pairs.dirichletmix <- function(mix, data = NULL, group = NULL, right = FALSE,
   m <- length(mix$pr)
   if (!is.null(group)) {
     a <- t(rowsum(t(a), group))
-    tag <- sapply(sort(unique(group)), function(x)
-      paste(which(group == x), collapse = ","))
+    tag <- sapply(sort(unique(group)),
+                  function(x) paste(which(group == x), collapse = ","))
     if (!is.null(data)) data <- t(rowsum(t(data), group))
-  } else tag <- seq_along(a[1,])
+  } else {
+    tag <- seq_along(a[1, ])
+  }
   D <- ncol(a)
   D2 <- D * D
   grid <- matrix(1:(D2), nrow = D, byrow = TRUE)
@@ -178,7 +181,9 @@ pairs.dirichletmix <- function(mix, data = NULL, group = NULL, right = FALSE,
     if (is.null(plev)) plev <- c(50, 65, 75, 80, 85, 90, 94, 97, 99, 100) / 100
     lv <- matrix(nrow = D2, ncol = length(plev))
     colnames(lv) <- paste0(plev * 100, "%")
-  } else nulv <- FALSE
+  } else {
+    nulv <- FALSE
+  }
   nlev <- ncol(lv)
 
   old_par <- par(no.readonly = TRUE)
@@ -222,7 +227,9 @@ pairs.dirichletmix <- function(mix, data = NULL, group = NULL, right = FALSE,
               levels = lv[k, ], col = viridis::viridis(nlev), add = TRUE)
       points.simplex(attr(smix, "mode"), right = right, add = TRUE,
                      pch = 16, cex = 0.6)
-    } else plot.new()
+    } else {
+      plot.new()
+    }
   }
   par(old_par)
   lv
