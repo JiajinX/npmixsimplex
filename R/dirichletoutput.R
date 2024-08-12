@@ -60,7 +60,7 @@ marginpanel <- function(lab = expression(x), dmax) {
 # Draw a sequence of points on simplex
 # size: sum of each observation, for compositional data is defualt sum to 1
 # right: TRUE for right triangle FALSE for equilateral triangle
-points.simplex <- function(data, lab = NULL, size = 1, right = FALSE,
+points_simplex <- function(data, lab = NULL, size = 1, right = FALSE,
                            add = FALSE, col = 2, pch = 1, cex = 0.5) {
   if (!add) {
     if (is.null(lab)) {
@@ -86,8 +86,8 @@ points.simplex <- function(data, lab = NULL, size = 1, right = FALSE,
 # function will sum these variables as one variable (marginal).
 plot.dirichletmix <- function(mix, data = NULL,
                               type = c("both", "mode", "contour", "null"),
-                              x1 = 2, x2 = 3, right = FALSE,
-                              lv = NULL, plev = NULL, axl = 100) {
+                              x1 = 2, x2 = 3, right = FALSE, axl = 100,
+                              lv = NULL, plev = NULL, prop = TRUE) {
   if (!identical(intersect(x1, x2), numeric(0)))
     stop("Duplicate variables in x1 and x2")
   D <- ncol(mix$alpha)
@@ -112,7 +112,7 @@ plot.dirichletmix <- function(mix, data = NULL,
     sdata <- t(rowsum(t(data), group))
     sdata <- sdata[, c(3, 1, 2)]
     if (right) sdata <- sdata[, -1]
-    points.simplex(sdata, right = right, add = TRUE, col = "gray70")
+    points_simplex(sdata, right = right, add = TRUE, col = "gray70")
   }
   if (type != "null") { # Draw contour, mode
     ax1 <- seq(0, 1, l = axl)
@@ -136,12 +136,13 @@ plot.dirichletmix <- function(mix, data = NULL,
       }
       lv <- quantile(d[i], probs = plev) # Proportion levels
     }
+    lb <- if (prop) names(lv) else round(lv, 2)
     if (type != "mode") {
-      contour(ax2, ax1, dm, levels = lv, col = viridis::viridis(length(lv)),
-              add = TRUE)
+      contour(ax2, ax1, dm, levels = lv, labels = lb,
+              col = viridis::viridis(length(lv)), add = TRUE)
     }
     if (type != "contour") {
-      points.simplex(attr(smix, "mode"), right = right,
+      points_simplex(attr(smix, "mode"), right = right,
                      add = TRUE, pch = 16, cex = 0.6)
     }
     lv
@@ -150,8 +151,13 @@ plot.dirichletmix <- function(mix, data = NULL,
 
 # Just like pairs function of Dirichlet mixture with every two variables
 # For high dimensional data, pairs plot marginal density of each group
-pairs.dirichletmix <- function(mix, data = NULL, group = NULL, right = FALSE,
-                               lv = NULL, plev = NULL, axl = 100) {
+# group: a list or vector to receive the group number of each variables, no
+# group by default
+# gprest: TRUE for group rest of variables as a new column, FALSE for don't
+# group rest variables
+pairs.dirichletmix <- function(mix, data = NULL, group = NULL, gprest = FALSE,
+                               right = FALSE, axl = 100,
+                               lv = NULL, plev = NULL, prop = TRUE) {
   ax1 <- seq(0, 1, l = axl)
   ax2 <- if (right) seq(0, 1, l = axl) else seq(0, 2 / sqrt(3), l = axl)
   x <- as.matrix(expand.grid(ax2, ax1))
@@ -164,14 +170,33 @@ pairs.dirichletmix <- function(mix, data = NULL, group = NULL, right = FALSE,
   a0 <- sum(a[1, ])
   m <- length(mix$pr)
   if (!is.null(group)) {
-    a <- t(rowsum(t(a), group))
+    if (is.list(group)) {
+      group <- lapply(group, unique)
+      if (any(duplicated(unlist(group)))) {
+        stop("Duplicate columns in different groups")
+      } # Ensure each column belongs to only one group
+      D <- ncol(a)
+      vec <- rep(NA, D)
+      for (grp in names(group)) {
+        vec[group[[grp]]] <- as.integer(gsub("[^0-9]", "", grp))
+      } # list -> vector
+      isna <- is.na(vec)
+      remain <- setdiff(seq_len(D), vec[!isna])
+      vec[isna] <- if (gprest) remain[1] else remain[1:sum(isna)]
+      # Fill the remaining ungrouped columns
+      group <- vec
+    }
+    unigroup <- sort(unique(group))
+    if (length(unigroup) < 3) stop("Number of groups should larger than 3")
+    if (any(diff(unigroup) != 1)) stop("Error with group number")
+    a <- t(rowsum(t(a), group)) # Group components
     tag <- sapply(sort(unique(group)),
                   function(x) paste(which(group == x), collapse = ","))
-    if (!is.null(data)) data <- t(rowsum(t(data), group))
+    if (!is.null(data)) data <- t(rowsum(t(data), group)) # Group data
   } else {
     tag <- seq_along(a[1, ])
   }
-  D <- ncol(a)
+  D <- ncol(a) # Update D after grouping
   D2 <- D * D
   grid <- matrix(1:(D2), nrow = D, byrow = TRUE)
 
@@ -216,16 +241,17 @@ pairs.dirichletmix <- function(mix, data = NULL, group = NULL, right = FALSE,
       d[i] <- ddirichletmix(x[i, ], smix)
       dm <- matrix(d, nrow = axl, ncol = axl)
       if (nulv) lv[k, ] <- quantile(d[i], probs = plev)
+      lb <- if (prop) colnames(lv) else round(lv[k, ], 2)
       simplexpanel(lab = lab, right = right)
       if (!is.null(data)) {
         sdata <- cbind(data[, ir], data[, ic])
         if (!right) sdata <- cbind(1 - rowSums(data[, idx, drop = FALSE]),
                                    sdata)
-        points.simplex(sdata, right = right, add = TRUE, col = "gray70")
+        points_simplex(sdata, right = right, add = TRUE, col = "gray70")
       }
-      contour(ax2, ax1, dm,
-              levels = lv[k, ], col = viridis::viridis(nlev), add = TRUE)
-      points.simplex(attr(smix, "mode"), right = right, add = TRUE,
+      contour(ax2, ax1, dm, levels = lv[k, ], labels = lb,
+              col = viridis::viridis(nlev), add = TRUE)
+      points_simplex(attr(smix, "mode"), right = right, add = TRUE,
                      pch = 16, cex = 0.6)
     } else {
       plot.new()
@@ -235,8 +261,45 @@ pairs.dirichletmix <- function(mix, data = NULL, group = NULL, right = FALSE,
   lv
 }
 
+# Plot density contour just from sampling data according to the principle
+# of hist plot
+# split: must be a even number
+contour_sample <- function(data, split, lv = NULL, plev = NULL, prop = TRUE) {
+  if (split %% 2 == 1) stop("Split value should be even")
+  x <- seq(0, 2 / sqrt(3), len = split * 2 + 1)
+  xc <- x[seq_along(x) %% 2 == 0] # Center of x
+  y <- seq(0, 1, len = split + 1)
+  yc <- y[seq_along(y) %% 2 == 0] # Center of y
+  xy <- as.matrix(expand.grid(xc, yc)) # matrix of split * (split / 2)
+  rect <- c(2 / sqrt(3) / split, 2 / split) # length of rectangle side
+  rect_area <- prod(rect) # Area of rectangle
+  ileft <- seq(1, by = split + 1, len = split / 2)
+  iright <- seq(split, by = split - 1, len = split / 2)
+  ibound <- c(ileft, iright) # index on boundary
+  itriangle <- unlist(apply(cbind(ileft, iright), 1, function(r) r[1]:r[2]))
+  # Rectangle index in simplex
+  tdata <- cbind((2 - 2 * data[, 2] - data[, 1]) / sqrt(3), data[, 1])
+  idx <- t(t(tdata) %/% rect + 1)
+  idx <- (idx[, 2] - 1) * split + idx[, 1] # Rectangle index of data
+  nj <- tabulate(idx, nbins = split^2 / 2) # Number of points in each rectangle
+  nj[ibound] <- nj[ibound] * 2 # Points * 2 in boundary (area is triangle)
+  pr <- nj / sum(nj) / rect_area # Probability (density)
+  if (is.null(lv)) {
+    if (is.null(plev)) {
+      plev <- c(50, 65, 75, 80, 85, 90, 94, 97, 99, 100) / 100
+    }
+    lv <- quantile(pr[itriangle], probs = plev) # Proportion levels
+  }
+  lb <- if (prop) names(lv) else round(lv, 2)
+  dm <- matrix(pr, nrow = split, ncol = split / 2)
+  simplexpanel()
+  contour(xc, yc, dm, levels = lv, labels = lb,
+          col = viridis::viridis(length(lv)), add = T)
+  lv
+}
+
 # Draw line segments between pairs of points on simplex
-segments.simplex <- function(x, y, size = 1, add = FALSE,
+segments_simplex <- function(x, y, size = 1, add = FALSE,
                              lty = 3, col = "gray40") {
   if (!add) simplexpanel()
   x <- cbind((x[, 3] * 2 + x[, 1]) / sqrt(3), x[, 1]) / size
@@ -246,7 +309,8 @@ segments.simplex <- function(x, y, size = 1, add = FALSE,
 
 # Draw contour lines on simplex of Dirichlet mixture's gradient function
 # w: log f(x_i; G); size: sum of alpha, a0
-contour_gradient <- function(data, w, size, lv = NULL, plev = NULL, axl = 100) {
+contour_gradient <- function(data, w, size, lv = NULL, plev = NULL, prop = TRUE,
+                             axl = 100) {
   x1 <- seq(0, 2 / sqrt(3), l = axl)
   x2 <- seq(0, 1, l = axl)
   x <- as.matrix(expand.grid(x1, x2))
@@ -265,6 +329,7 @@ contour_gradient <- function(data, w, size, lv = NULL, plev = NULL, axl = 100) {
     }
     lv <- quantile(d[i], probs = plev) # Proportion levels
   }
+  lb <- if (prop) names(lv) else round(lv, 2)
 
   lab <- list(expression(alpha[1]), expression(alpha[2]), expression(alpha[3]))
   simplexpanel(lab = lab)
@@ -277,7 +342,7 @@ contour_gradient <- function(data, w, size, lv = NULL, plev = NULL, axl = 100) {
                 sidel / 2, 1 - l3, sidel - l2, l1),
               nrow = 4)
   segments(l[1, ], l[2, ], l[3, ], l[4, ], col = "#0000CD", lty = 2)
-  contour(x1, x2, dm, levels = lv, xlab = "x", ylab = "y",
+  contour(x1, x2, dm, xlab = "x", ylab = "y", levels = lv, labels = lb,
           col = viridis::viridis(length(lv)), add = TRUE)
 }
 

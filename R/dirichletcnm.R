@@ -1,52 +1,86 @@
 ## ======================= Step function of algorithm ======================= ##
 
+# Initialize the data on the boundary (value with 0)
+initial_boundary <- function(data, h, tol = 0) {
+  D <- ncol(data)
+  a0 <- 1 / h + D
+  isbound <- data == 0
+  if (all(!isbound)) return() # If no data on boundary, return
+  r0 <- rowSums(isbound)
+  bound_data <- data[r0 > 0, , drop = FALSE]
+  r0 <- r0[r0 > 0] # Count number of 0 of boundary data,
+  o <- order(r0, decreasing = TRUE)
+  bound_data <- bound_data[o, ]
+  # Order boundary data by count of 0 in decreasing
+  n <- nrow(bound_data)
+  index <- 1:n
+  alpha <- matrix(nrow = n, ncol = D)
+  for (k in seq_len(n)) {
+    uncover <- bound_data[index, , drop = FALSE]
+    alpha[k, ] <- uncover[1, ] / h + 1
+    # Select first uncovered data as new mode of distribution
+    d <- ddirichlet(uncover, alpha[k, ])
+    i <- d <= tol
+    # Can tol value be calculated given by distribution and 95% interval?
+    index <- index[i]
+    if (length(index) == 0) break
+  }
+  alpha[1:k, , drop = FALSE]
+}
+
 # Initialize Dirichlet mixture by grouping data (simple clustering)
 # h: bandwidth; by: index of column used to sort components
 initial_dirichletmix <- function(data, h, by) {
   n <- nrow(data)
   D <- ncol(data)
   a0 <- 1 / h + D
-  tdata <- (asin(sqrt((data / h + 1) / a0)) - asin(sqrt(1 / a0)))
+  cst <- 2 * sqrt(a0 + 1) # Constant value in transformation
+  tdata <- cst * asin(sqrt(data))
   # Variance stabilization transformation
-  side <- (asin(sqrt((1 / h + 1) / a0)) - asin(sqrt(1 / a0)))
-  tdata <- tdata / side
-  # Normalize the tdata into a same size space (independent of h)
-  tmu <- colMeans(tdata) # Or transform(colMeans(data)) ???
+  tmu <- cst * asin(sqrt(colMeans(data)))
   # tmu should be the first center of cluster groups
   d2 <- d2mu <- colSums((t(tdata) - tmu)^2) # Distance from tdata to tmu
   d <- sqrt(d2)
   index <- 1:n
   pts <- matrix(nrow = n, ncol = D)
+  r2 <- 9 + 1.3 * (D - 3)
+  exout <- sqrt(r2) * 4 / 3
+  # tfsimplexpanel(a0)
+  # plot3d(t(tmu), col = 1, add = T, size = 6)
   for (k in seq_len(n)) {
-    i <- d2 > h
-    # All points with distance < h will be in a cluster group with
-    # pts[k, ] as the center and h as the radius of circle
+    i <- d2 > r2
+    # All points with distance < r2 will be in a cluster group with
+    # pts[k, ] as the center and r2 as the radius of circle
+    # plot3d(tdata[index, , drop = F][!i, , drop = F], add = T,
+    #        col = col[k %% length(col) + 1], size = 4)
     index <- index[i] # Uncovered data points
     if (length(index) == 0) break
     imin <- index[which.min(d2mu[index])]
-    update <- (tdata[imin, ] - tmu) * sqrt(1 + 4 / 9 * h  / d[imin]) # 4/9 ???
+    update <- (tdata[imin, ] - tmu) * sqrt(1 + exout / d[imin])
     pts[k, ] <- tmu + update
     # Find the closet uncovered point to the tmu, expand this point
     # outward a certain distance as the new cluster center
-    if (any(sum(pts[k, ] < 0))) { # If points outside the boundary, pull it back
+    if (any(sum(pts[k, ] < 0))) {
+      # If points outside the boundary, pull it back
       lf <- tmu / -update
       lf <- min(lf[lf > 0])
       pts[k, ] <- tmu + lf * update
     }
     d2 <- colSums((t(tdata)[, index, drop = FALSE] - pts[k, ])^2)
   }
-  tmu <- if (k == 1) tmu else rbind(tmu, pts[1:(k - 1), , drop = FALSE])
-  # Set tmu as center of cluster
+  tmu <- if (k == 1) t(tmu) else rbind(tmu, pts[1:(k - 1), , drop = FALSE])
+  # Set tmu as center of clusters
   rownames(tmu) <- NULL
-  d2mu <- rowSums((data[rep(1:n, k), ] - tmu[rep(1:k, each = n), ])^2)
+  # plot3d(tmu, col = 1, add = T, size = 6)
+  d2mu <- rowSums((tdata[rep(1:n, k), ] - tmu[rep(1:k, each = n), ])^2)
   dim(d2mu) <- c(n, k)
   imu <- apply(d2mu, 1, which.min)
   nj <- tabulate(imu, nbins = k)
   pr <- nj / sum(nj) # Calculate pr by distance of data points and tmu
   j <- pr != 0
-  emu <- sin(tmu[j, , drop = FALSE] * side + asin(sqrt(1 / a0)))^2
-  emu <- emu / rowSums(emu) # emu should > 1 / a0
-  mode <- (emu * a0 - 1) * h
+  mu <- sin(tmu[j, , drop = FALSE] / cst)^2
+  mu <- mu / rowSums(mu) # mu should > 1 / a0
+  mode <- (mu * a0 - 1) * h
   # Transform tmu back to the simplex, which are the means (a_i / a0) of the
   # Dirichlet components, then got the modes by means
   i <- which(rowSums(mode < 0) > 0)
@@ -56,7 +90,10 @@ initial_dirichletmix <- function(data, h, by) {
     mode[i, ] <- smode / rowSums(smode)
   }
   alpha <- mode / h + 1
-  dirichletmix(alpha, pr[j], by = by) # Drop tiny components ???
+  mix <- dirichletmix(alpha, pr[j], by = by)
+  attr(mix, "ll") <- logLik(mix, data)
+  print(nrow(mix$alpha))
+  mix
 }
 
 # Objective function needs to be maximized by iteration alpha (EM -> iter_alpha)
@@ -158,8 +195,10 @@ iter_alpha <- function(x, a, p, maxit = 100, tol = 1e-4) {
     a <- stepup(a, update) # Update alpha
     fa <- sum(calfun_alpha(x, a, p)) # ??? bug: fa -> -Inf
     # Decreasing from -15151.1323580999 to -Inf
-    if (fa < fa.old) cat("Decreasing from", as.character(signif(fa.old, 16)),
-                         "to", as.character(signif(fa, 16)), "\n")
+    # if (fa < fa.old) cat("Decreasing from", as.character(signif(fa.old, 16)),
+    #                      "to", as.character(signif(fa, 16)),
+    #                      "with value:", as.character(signif(fa - fa.old, 16)),
+    #                      "\n")
     # cat("\nfa.old:"); print(as.character(signif(fa.old, 16)))
     # cat("\nfa:"); print(as.character(signif(fa, 16)))
     if (fa <= fa.old + tol) break
@@ -266,11 +305,11 @@ MEM <- function(data, a, w, plot = FALSE, tem = 5, tol = 1e-4) {
     pi.s <- colSums(pi.d)
     p <- pi.d / rep(pi.s, each = n)
     a <- iter_alpha(data, a, p) # Update alpha
-    if (plot) segments.simplex(a.old, a, size, add = TRUE)
+    if (plot) segments_simplex(a.old, a, size, add = TRUE)
     # Plot the tack of alpha from initial to local maximum of gradient function
     a.old <- a
   }
-  if (plot) points.simplex(a, size, add = TRUE, pch = 19, cex = 0.65)
+  if (plot) points_simplex(a, size, add = TRUE, pch = 19, cex = 0.65)
   # Final alpha after updating
   if (!convergence) {
     logd <- ddirichlet(data, a, log = TRUE, outer = TRUE) - w
@@ -375,12 +414,16 @@ collapse_points <- function(mix, data, tol = 1e-3) {
     ll <- logLik(mix, data) # Update log-likelihood after drop components
   }
   m <- length(mix$pr)
-  if (m == 1 || tol <= 0) return(list("mix" = mix, "ll" = ll))
+  if (m == 1 || tol <= 0) {
+    attr(mix, "ll") <- ll
+    return(mix)
+  }
   o <- do.call(order, split(mix$alpha, col(mix$alpha))) # Order by each column
   mix$alpha <- mix$alpha[o, , drop = FALSE]
   mix$pr <- mix$pr[o]
   prec <- 1e-10 # Initial precision value
   repeat {
+    if (nrow(mix$alpha) <= 1) break
     d <- abs(mix$alpha[-1, , drop = FALSE] -
                mix$alpha[-nrow(mix$alpha), , drop = FALSE])
     prec <- 10 * max(min(lsei::matMaxs(d)), prec)
@@ -401,7 +444,6 @@ cnmdm <- function(data, h, verbose = 0, maxit = 100, nt = 20, tol = 1e-4) {
   by <- which.min(colSums(apply(data, 2, duplicated)))
   # Initial the mixture
   mix <- initial_dirichletmix(data, h, by)
-  attr(mix, "ll") <- logLik(mix, data)
   convergence <- 1
   tem <- 5
   for (i in seq_len(maxit)) {
@@ -412,10 +454,10 @@ cnmdm <- function(data, h, verbose = 0, maxit = 100, nt = 20, tol = 1e-4) {
     # no need combine support points in EM step
     # Expand new support points
     w <- ddirichletmix(data, mix, log = TRUE) # log f(x_i;G)
-    t <- rbind(mix$alpha, gmultinomix(nt, 1 / mix$h, data, 1 / exp(w)) + 1)
+    t <- rbind(mix$alpha, gmultinomix(nt, 1 / mix$h, data, exp(-w)) + 1)
     t <- MEM(data, t, w)
     np <- select_points(t, mix$alpha, by)
-    # points.simplex(np, size = sum(np[1, ]), add = TRUE,
+    # points_simplex(np, size = sum(np[1, ]), add = TRUE,
     # col = "blue", pch = 19, cex = 0.65)
     # Update mass of components
     mix <- CNM(np, mix, data, w, by)

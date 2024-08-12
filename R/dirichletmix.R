@@ -20,6 +20,10 @@ dirichletmix <- function(a = rep(2, 3), pr = 1, sort = TRUE, by = 1) {
   pr <- rep(pr, len = m)
   pr <- pr / sum(pr)
   h <- 1 / (a0 - D) # bandwidth
+  at <- a - 1 # To avoid some numeric issue in R
+  if (any(at < -1e-8)) stop("Alpha should larger than 1")
+  at[at < 0] <- 0
+  a <- at / rowSums(at) * (a0 - D) + 1
   mix <- list("alpha" = a, "pr" = pr, "h" = h)
   attr(mix, "mode") <- (a - 1) * h
   class(mix) <- "dirichletmix"

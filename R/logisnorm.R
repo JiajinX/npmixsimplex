@@ -1,4 +1,4 @@
-# Create multivariate normal distribution from Chaco'S parameters
+# Create multivariate normal distribution from Chacon'S parameters
 chaconmix <- function(no) {
   mix <- switch(no,
     list(mus = rbind(c(0, 0)),
@@ -75,7 +75,7 @@ dmvnormix <- function(x, mix) {
 
 # Log-transform multivariate normal density on simplex
 contour.mvnormix <- function(mix, data = NULL,
-                             lv = NULL, plev = NULL, axl = 100) {
+                             lv = NULL, plev = NULL, prop = TRUE, axl = 100) {
   x1 <- seq(0, 2 / sqrt(3), l = axl)
   x2 <- seq(0, 1, l = axl)
   x <- as.matrix(expand.grid(x1, x2))
@@ -94,16 +94,17 @@ contour.mvnormix <- function(mix, data = NULL,
     }
     lv <- quantile(d[i], probs = plev) # Proportion levels
   }
+  lb <- if (prop) names(lv) else round(lv, 2)
   simplexpanel()
-  if (!is.null(data)) points.simplex(data, col = "gray70", add = TRUE)
-  contour(x1, x2, dm, levels = lv, xlab = "x", ylab = "y",
+  if (!is.null(data)) points_simplex(data, col = "gray70", add = TRUE)
+  contour(x1, x2, dm, levels = lv, labels = lb, xlab = "x", ylab = "y",
           col = viridis::viridis(length(lv)), add = TRUE)
   lv
 }
 
 # Plot gaussian mixture distribution density on real space
 contourR <- function(mix, data = NULL, x1 = c(-3, 3), x2 = c(-3, 3),
-                     lv = NULL, plev = NULL, axl = 100) {
+                     lv = NULL, plev = NULL, prop = TRUE, axl = 100) {
   x1 <- seq(x1[1], x1[2], l = axl)
   x2 <- seq(x2[1], x2[2], l = axl)
   x <- as.matrix(expand.grid(x1, x2))
@@ -115,7 +116,8 @@ contourR <- function(mix, data = NULL, x1 = c(-3, 3), x2 = c(-3, 3),
     }
     lv <- quantile(d, probs = plev) # Proportion levels
   }
-  contour(x1, x2, d, levels = lv, xlab = "x", ylab = "y",
+  lb <- if (prop) names(lv) else round(lv, 2)
+  contour(x1, x2, d, levels = lv, labels = lb, xlab = "x", ylab = "y",
           col = viridis::viridis(length(lv)))
   if (!is.null(data)) points(data, col = "gray70", cex = 0.5)
   points(mix$mus, col = 2, pch = 16, cex = 0.6)
