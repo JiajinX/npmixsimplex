@@ -4,10 +4,12 @@
 # by: index of column used to sort
 sort.dirichletmix <- function(mix, by = 1, decreasing = FALSE) {
   if (length(mix$pr) <= 1) return(mix)
+  logmbeta <- attr(mix$alpha, "logmbeta")
   o <- order(mix$alpha[, by], decreasing = decreasing)
   mix$alpha <- mix$alpha[o, ]
   mix$pr <- mix$pr[o]
   attr(mix, "mode") <- attr(mix, "mode")[o, ]
+  attr(mix$alpha, "logmbeta") <- logmbeta[o]
   mix
 }
 
@@ -22,10 +24,16 @@ dirichletmix <- function(a = rep(2, 3), pr = 1, sort = TRUE, by = 1) {
   h <- 1 / (a0 - D) # bandwidth
   at <- a - 1 # To avoid some numeric issue in R
   if (any(at < -1e-8)) stop("Alpha should larger than 1")
-  at[at < 0] <- 0
-  a <- at / rowSums(at) * (a0 - D) + 1
+  neg <- at < 0
+  at[neg] <- 0
+  mode <- at / rowSums(at)
+  if (any(neg)) a <- mode / h + 1
+  # let a = 1 for some a close to 1 but < 1, and sum to a0
+  if (is.null(attr(a, "logmbeta"))) {
+    attr(a, "logmbeta") <- lgamma(rowSums(a)) - rowSums(lgamma(a))
+  } # If no log-multibeta or alpha has been modified
   mix <- list("alpha" = a, "pr" = pr, "h" = h)
-  attr(mix, "mode") <- (a - 1) * h
+  attr(mix, "mode") <- mode
   class(mix) <- "dirichletmix"
   if (sort) mix <- sort(mix, by = by)
   mix
@@ -54,19 +62,23 @@ ddirichlet <- function(x, a, log = FALSE, outer = FALSE) {
   if (is.vector(a)) a <- t(a)
   n <- nrow(x)
   m <- nrow(a)
-  logx <- log(x)
-  logmultibeta <- lgamma(rowSums(a)) - rowSums(lgamma(a)) # Constant part
+  logx <- attr(x, "log")
+  logmbeta <- attr(a, "logmbeta")
+  if (is.null(logx)) logx <- log(x)
+  if (is.null(logmbeta)) {
+    logmbeta <- lgamma(rowSums(a)) - rowSums(lgamma(a)) # Constant part
+  }
   if (!outer) { # Got a vector by adopting cycling rule on x, a
-    a <- a[rep_len(1:m, n), ]
-    logmultibeta <- rep_len(logmultibeta, n)
+    a <- a[rep_len(1:m, n), , drop = FALSE]
+    logmbeta <- rep_len(logmbeta, n)
   } else { # Got a matrix like outer function
-    a <- a[rep(1:m, each = n), ]
-    logmultibeta <- rep(logmultibeta, each = n)
-    logx <- logx[rep(1:n, m), ]
+    a <- a[rep(1:m, each = n), , drop = FALSE]
+    logmbeta <- rep(logmbeta, each = n)
+    logx <- logx[rep(1:n, m), , drop = FALSE]
   }
   xa <- (a - 1) * logx
-  xa[is.na(xa)] <- 0
-  d <- logmultibeta + rowSums(xa)
+  xa[is.na(xa)] <- 0 # When x = 0 and a = 1, x^(a-1) = 1 => (a-1) * logx = 0
+  d <- logmbeta + rowSums(xa)
   if (outer) dim(d) <- c(n, m)
   if (!log) d <- exp(d)
   d
@@ -80,6 +92,7 @@ ddirichletmix <- function(x, mix, log = FALSE) {
   if (any(j)) {
     mix$alpha <- mix$alpha[!j, , drop = FALSE]
     mix$pr <- mix$pr[!j]
+    attr(mix$alpha, "logmbeta") <- attr(mix$alpha, "logmbeta")[!j]
   }
   logd <- ddirichlet(x, mix$alpha, log = TRUE, outer = TRUE) +
     rep(log(mix$pr), rep(nrow(x), length(mix$pr)))
@@ -97,6 +110,27 @@ ddirichletmix <- function(x, mix, log = FALSE) {
 # Log-likelihood of Dirichlet mixture
 logLik.dirichletmix <- function(mix, x) {
   sum(ddirichletmix(x, mix, log = TRUE))
+}
+
+# Generate data from Multinomial mixture distribution
+# n: number of points want to generate; size: sum of x (= a0);
+# pr: parameters of multinomial; mass: mass of Multinomial mixture components
+rmultinomix <- function(n, size, pr, mass) {
+  if (is.vector(pr)) pr <- t(pr)
+  m <- nrow(pr)
+  D <- ncol(pr)
+  mass <- rep(mass, len = m)
+  mass <- mass / sum(mass)
+  insz <- ceiling(size) # Must be an integer
+  tb <- table(sample.int(m, n, prob = mass, replace = TRUE))
+  cl <- c(0, cumsum(tb)) # Index
+  point <- matrix(nrow = D, ncol = n)
+  for (i in seq_along(tb)) {
+    point[, (cl[i] + 1):cl[i + 1]] <-
+      rmultinom(tb[i], insz, pr[as.integer(names(tb[i])), ])
+    # Generate x from Multinomial mixture distribution
+  }
+  t(point)
 }
 
 # Create a class called "betamix" to set parameters of beta mixture

@@ -190,7 +190,7 @@ pairs.dirichletmix <- function(mix, data = NULL, group = NULL, gprest = FALSE,
     if (length(unigroup) < 3) stop("Number of groups should larger than 3")
     if (any(diff(unigroup) != 1)) stop("Error with group number")
     a <- t(rowsum(t(a), group)) # Group components
-    tag <- sapply(sort(unique(group)),
+    tag <- sapply(unigroup,
                   function(x) paste(which(group == x), collapse = ","))
     if (!is.null(data)) data <- t(rowsum(t(data), group)) # Group data
   } else {

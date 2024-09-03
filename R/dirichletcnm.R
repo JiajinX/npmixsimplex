@@ -1,31 +1,27 @@
 ## ======================= Step function of algorithm ======================= ##
 
-# Initialize the data on the boundary (value with 0)
-initial_boundary <- function(data, h, tol = 0) {
-  D <- ncol(data)
-  a0 <- 1 / h + D
-  isbound <- data == 0
-  if (all(!isbound)) return() # If no data on boundary, return
-  r0 <- rowSums(isbound)
-  bound_data <- data[r0 > 0, , drop = FALSE]
-  r0 <- r0[r0 > 0] # Count number of 0 of boundary data,
-  o <- order(r0, decreasing = TRUE)
-  bound_data <- bound_data[o, ]
-  # Order boundary data by count of 0 in decreasing
-  n <- nrow(bound_data)
-  index <- 1:n
-  alpha <- matrix(nrow = n, ncol = D)
-  for (k in seq_len(n)) {
-    uncover <- bound_data[index, , drop = FALSE]
-    alpha[k, ] <- uncover[1, ] / h + 1
-    # Select first uncovered data as new mode of distribution
-    d <- ddirichlet(uncover, alpha[k, ])
-    i <- d <= tol
-    # Can tol value be calculated given by distribution and 95% interval?
-    index <- index[i]
-    if (length(index) == 0) break
+# Check if points out of boundary after updating and do back tracking
+stepup <- function(old, update, bound = 0) {
+  new <- old + update
+  j <- which(rowSums(new < bound) > 0) # Find components with new < boundary
+  if (!identical(j, integer(0))) { # Pull new back to boundary
+    sold <- old[j, , drop = FALSE]
+    supdate <- update[j, , drop = FALSE]
+    lf <- (sold - bound) / -supdate
+    # Case of update alpha:
+    # For a_k = 1, update_k will be >= 0:
+    # when a_k = 1 & update_k = 0, lf = NAN
+    # when a_k = 1 & update_k > 0, lf = 0
+    lf[lf < 0 | is.na(lf)] <- Inf
+    # lf < 0: a_k > 1 & update_k > 0
+    # lf = NA: update_k = 0
+    rmin <- apply(lf, 1, function(r) which.min(r))
+    minloc <- cbind(seq_along(j), j, rmin)
+    new[j, ] <- sold + lf[minloc[, -2, drop = FALSE]] * supdate
+    # Back tracking, pull back to boundary
+    new[minloc[, -1, drop = FALSE]] <- bound
   }
-  alpha[1:k, , drop = FALSE]
+  new
 }
 
 # Initialize Dirichlet mixture by grouping data (simple clustering)
@@ -43,8 +39,10 @@ initial_dirichletmix <- function(data, h, by) {
   d <- sqrt(d2)
   index <- 1:n
   pts <- matrix(nrow = n, ncol = D)
-  r2 <- 9 + 1.3 * (D - 3)
+  r2 <- ifelse(D > 10, qchisq(0.95, df = D), 9)
   exout <- sqrt(r2) * 4 / 3
+  # r2 <- 9
+  # exout <- 4
   # tfsimplexpanel(a0)
   # plot3d(t(tmu), col = 1, add = T, size = 6)
   for (k in seq_len(n)) {
@@ -63,8 +61,9 @@ initial_dirichletmix <- function(data, h, by) {
     if (any(sum(pts[k, ] < 0))) {
       # If points outside the boundary, pull it back
       lf <- tmu / -update
-      lf <- min(lf[lf > 0])
+      lf <- min(lf[lf >= 0])
       pts[k, ] <- tmu + lf * update
+      # numeric issue for results close to 1 but < 1
     }
     d2 <- colSums((t(tdata)[, index, drop = FALSE] - pts[k, ])^2)
   }
@@ -80,19 +79,13 @@ initial_dirichletmix <- function(data, h, by) {
   j <- pr != 0
   mu <- sin(tmu[j, , drop = FALSE] / cst)^2
   mu <- mu / rowSums(mu) # mu should > 1 / a0
-  mode <- (mu * a0 - 1) * h
+  update <- (mu * D - 1) * h # Update from mu to mode
   # Transform tmu back to the simplex, which are the means (a_i / a0) of the
   # Dirichlet components, then got the modes by means
-  i <- which(rowSums(mode < 0) > 0)
-  if (!identical(i, integer(0))) { # If mode outside the boundary (mode < 0)
-    smode <- mode[i, , drop = FALSE]
-    smode[smode < 0] <- 0
-    mode[i, ] <- smode / rowSums(smode)
-  }
+  mode <- stepup(mu, update)
   alpha <- mode / h + 1
   mix <- dirichletmix(alpha, pr[j], by = by)
   attr(mix, "ll") <- logLik(mix, data)
-  print(nrow(mix$alpha))
   mix
 }
 
@@ -104,54 +97,28 @@ calfun_alpha <- function(x, a, p, deriv = 0) {
   D <- ncol(x)
   m <- nrow(a)
   logx <- attr(x, "log")
-  if (is.null(logx)) logx <- log(x)
+  if (is.null(logx)) logx <- pmax(log(x), log(1e-100))
+  if (deriv != 0) dim(p) <- NULL
   xp <-
     switch(deriv + 1,
-      rowSums((a %*% t(logx) - rowSums(lgamma(a))) * t(p)),
+      rowSums((tcrossprod(a, logx) - rowSums(lgamma(a))) * t(p)),
       # Original objective function
-      (logx[rep(1:n, m), ] - digamma(a)[rep(1:m, each = n), ]) * c(p),
+      (logx[rep(1:n, m), ] - digamma(a)[rep(1:m, each = n), ]) * p,
       # p_ij * [log(x_ik) - ψ(α_jk)] - first derivative
-      -trigamma(a)[rep(1:m, each = n), ] * c(p)
+      -trigamma(a)[rep(1:m, each = n), ] * p
       # -p_ij * ψ'(α_jk) - second derivative
     )
   if (deriv != 0) {
     dim(xp) <- c(n, m * D)
-    xp <- matrix(colSums(xp), nrow = m)
+    xp <- colSums(xp)
+    dim(xp) <- c(m, D)
   }
   xp
-}
-
-# Check if alpha points out of boundary after updating and do back tracking
-# (EM -> iter_alpha)
-stepup <- function(a, update) {
-  a.new <- a + update
-  # cat("\nalpha:\n"); print(a, digits = 16)
-  # cat("\nupdate:\n"); print(update, digits = 16)
-  j <- which(rowSums(a.new < 1) > 0) # Find components with alpha' < 1
-  if (!identical(j, integer(0))) { # Pull alpha back to 1
-    sa <- a[j, , drop = FALSE]
-    supdate <- update[j, , drop = FALSE]
-    lf <- (sa - 1) / -supdate
-    # For a_k = 1, update_k will be >= 0:
-    # when a_k = 1 & update_k = 0, lf = NAN
-    # when a_k = 1 & update_k > 0, lf = 0
-    lf[lf < 0 | is.na(lf)] <- Inf
-    # lf < 0: a_k > 1 & update_k > 0
-    # lf = NA: update_k = 0
-    rmin <- apply(lf, 1, function(r) which.min(r))
-    minloc <- cbind(seq_along(j), j, rmin)
-    a.new[j, ] <- sa + lf[minloc[, -2, drop = FALSE]] * supdate
-    # Back tracking, pull back to boundary
-    a.new[minloc[, -1, drop = FALSE]] <- 1
-  }
-  # cat("\na.new:\n"); print(a.new, digits = 16)
-  a.new
 }
 
 # Updating alpha by using Newton-Raphson method (EM)
 # x: data; a: alpha; p: value get from EM
 iter_alpha <- function(x, a, p, maxit = 100, tol = 1e-4) {
-  attr(x, "log") <- log(x)
   fa.old <- fa <- sum(calfun_alpha(x, a, p))
   # cat("\nalpha-function:"); print(as.character(signif(fa, 16)))
   # cat("\nalpha:\n"); print(a, digits = 16)
@@ -192,7 +159,7 @@ iter_alpha <- function(x, a, p, maxit = 100, tol = 1e-4) {
     iH[isbound] <- iHg[isbound] <- 0
     lambH <- lamb * iH
     update <- lambH - iHg
-    a <- stepup(a, update) # Update alpha
+    a <- stepup(a, update, bound = 1) # Update alpha
     fa <- sum(calfun_alpha(x, a, p)) # ??? bug: fa -> -Inf
     # Decreasing from -15151.1323580999 to -Inf
     # if (fa < fa.old) cat("Decreasing from", as.character(signif(fa.old, 16)),
@@ -204,6 +171,7 @@ iter_alpha <- function(x, a, p, maxit = 100, tol = 1e-4) {
     if (fa <= fa.old + tol) break
     fa.old <- fa
   } # The alpha-function seems to be monotonically increasing for each iteration
+  attr(a, "logmbeta") <- lgamma(rowSums(a)) - rowSums(lgamma(a))
   a
 }
 
@@ -231,7 +199,9 @@ EM <- function(data, mix, tem = 5, tol = 1e-4, verbose = 0) {
     if (any(j)) { # Delete support points with pr close to 0
       mix$pr <- mix$pr[!j]
       mix$pr <- mix$pr / sum(mix$pr)
+      logmbeta <- attr(mix$alpha, "logmbeta")[!j]
       mix$alpha <- mix$alpha[!j, ]
+      attr(mix$alpha, "logmbeta") <- logmbeta
       p <- p[, !j, drop = FALSE]
     }
     mix$alpha <- iter_alpha(data, mix$alpha, p) # Update alpha
@@ -248,34 +218,27 @@ EM <- function(data, mix, tem = 5, tol = 1e-4, verbose = 0) {
   mix
 }
 
-# Generate initial alpha points of Modal EM by Multinomial mixture distribution
-# n: number of points want to generate; size: sum of x (= a0);
-# pr: parameters of multinomial; mass: mass of Multinomial mixture components
-gmultinomix <- function(n, size, pr, mass) {
-  if (is.vector(pr)) pr <- t(pr)
-  m <- nrow(pr)
-  D <- ncol(pr)
-  mass <- rep(mass, len = m)
-  mass <- mass / sum(mass)
-  insz <- ceiling(size) # Must be an integer
-  tb <- table(sample.int(m, n, prob = mass, replace = TRUE))
-  cl <- c(0, cumsum(tb)) # Index
-  point <- matrix(nrow = D, ncol = n)
-  for (i in seq_along(tb)) {
-    point[, (cl[i] + 1):cl[i + 1]] <-
-      rmultinom(tb[i], insz, pr[as.integer(names(tb[i])), ])
-    # Generate x from Multinomial mixture distribution
-  }
-  point <- t(point)
-  noise <- matrix(runif(length(point), min = -0.5, max = 0.5), nrow = n)
+# Generate initial alpha points of Modal EM by Multinomial mixture distribution,
+# add the noise to make initial points more smooth and scatter
+initial_MEM <- function(n, mix, data, mass) {
+  D <- ncol(data)
+  size <- 1 / mix$h
+  pt <- rmultinomix(n, size, data, mass)
+  noise <- runif(n * D, min = -0.5, max = 0.5)
+  dim(noise) <- c(n, D)
+  noise <- matrix(runif(length(pt), min = -0.5, max = 0.5), nrow = n)
   noise <- noise - rowMeans(noise)
-  point <- point + noise
+  pt <- pt + noise
   # We want the generate x as the initial of alpha of Dirichlet mixture,
   # but x generate by Multinomial are integer. Thus add some noise of uniform
   # distribution to make x become real number
-  point[point < 0] <- 0
-  point[point > size] <- size # Pull back to boundary
-  point / rowSums(point) * size # Ensure sum to size (a0)
+  pt[pt < 0] <- 0
+  pt[pt > size] <- size # Pull back to boundary
+  pt <- pt / rowSums(pt) * size + 1 # Ensure sum to size (a0)
+  logmbeta <- lgamma(rowSums(pt)) - rowSums(lgamma(pt))
+  ip <- rbind(mix$alpha, pt)
+  attr(ip, "logmbeta") <- c(attr(mix$alpha, "logmbeta"), logmbeta)
+  ip
 }
 
 # Modal EM algorithm of the gradient function of
@@ -283,7 +246,7 @@ gmultinomix <- function(n, size, pr, mass) {
 # a: alpha; w: log f(x_i; G)
 MEM <- function(data, a, w, plot = FALSE, tem = 5, tol = 1e-4) {
   n <- nrow(data)
-  size <- sum(a[1, ])
+  size <- sum(a[1, ]) # Calulate by h ??
   if (plot) contour_gradient(data, w, size)
   # Plot contour of gradient of log-likelihood
   sg <- sg.old <- -Inf
@@ -327,6 +290,7 @@ select_points <- function(t, a, by = 1) {
   # Middle points of each pair support points on one coordinate
   o <- order(t[, by])
   g <- attr(t, "gradient")[o]
+  logmbeta <- attr(t, "logmbeta")[o]
   t <- t[o, , drop = FALSE] # order t by increasing
   index <- lsei::indx(t[, by], mids) + 1
   # Split t into several groups by interval of mids pairs
@@ -337,6 +301,7 @@ select_points <- function(t, a, by = 1) {
   np <- t[j, , drop = FALSE]
   gnp <- g[j]
   attr(np, "gradient") <- gnp
+  attr(np, "logmbeta") <- logmbeta[j]
   np # New support points with their gradient values
 }
 
@@ -346,8 +311,10 @@ CNM <- function(np, mix, data, w, by = 1, maxbt = 50) {
   if (missing(w)) w <- ddirichletmix(data, mix, log = TRUE) # log f(x_i; G)
   ll <- attr(mix, "ll")
   if (is.null(ll)) ll <- logLik(mix, data)
-  mix.raw <- dirichletmix(rbind(mix$alpha, np), c(mix$pr, double(length(np))),
-                          by = by)
+  pt <- rbind(mix$alpha, np)
+  attr(pt, "logmbeta") <- c(attr(mix$alpha, "logmbeta"), attr(np, "logmbeta"))
+  mix.raw <-
+    dirichletmix(pt, c(mix$pr, double(length(np))), by = by)
   # Add new support points and set their mass = 0
   logd <- ddirichlet(data, mix.raw$alpha, log = TRUE, outer = TRUE)
   # f(x_i; α_j)
@@ -409,8 +376,11 @@ collapse_points <- function(mix, data, tol = 1e-3) {
   if (is.null(ll)) ll <- logLik(mix, data)
   j <- mix$pr == 0 # Drop components with mass = 0
   if (any(j)) {
+    logmbeta <- attr(mix$alpha, "logmbeta")[!j]
     mix$alpha <- mix$alpha[!j, , drop = FALSE]
     mix$pr <- mix$pr[!j]
+    attr(mix$alpha, "logmbeta") <- logmbeta
+    attr(mix, "mode") <- attr(mix, "mode")[!j, , drop = FALSE]
     ll <- logLik(mix, data) # Update log-likelihood after drop components
   }
   m <- length(mix$pr)
@@ -419,8 +389,10 @@ collapse_points <- function(mix, data, tol = 1e-3) {
     return(mix)
   }
   o <- do.call(order, split(mix$alpha, col(mix$alpha))) # Order by each column
+  logmbeta <- attr(mix$alpha, "logmbeta")[o]
   mix$alpha <- mix$alpha[o, , drop = FALSE]
   mix$pr <- mix$pr[o]
+  attr(mix$alpha, "logmbeta") <- logmbeta
   prec <- 1e-10 # Initial precision value
   repeat {
     if (nrow(mix$alpha) <= 1) break
@@ -440,13 +412,81 @@ collapse_points <- function(mix, data, tol = 1e-3) {
 # Overall algorithm
 cnmdm <- function(data, h, verbose = 0, maxit = 100, nt = 20, tol = 1e-4) {
   if (!is.numeric(data)) data <- as.matrix(data)
+  attr(data, "log") <- pmax(log(data), log(1e-100))
   # if (missing(by))
   by <- which.min(colSums(apply(data, 2, duplicated)))
   # Initial the mixture
+  t1 <- Sys.time()
   mix <- initial_dirichletmix(data, h, by)
+  t2 <- Sys.time()
+  inip <- nrow(mix$alpha)
   convergence <- 1
   tem <- 5
+  time <- rep(0, 6)
   for (i in seq_len(maxit)) {
+    ot <- rep(0, 7)
+    ll.old <- attr(mix, "ll")
+    if (verbose > 0) print_verbose(verbose, i - 1, mix)
+    # EM algorithm
+    ot[1] <- Sys.time()
+    mix <- EM(data, mix, tem = tem)
+    ot[2] <- Sys.time()
+    # no need combine support points in EM step
+    # Expand new support points
+    w <- ddirichletmix(data, mix, log = TRUE) # log f(x_i;G)
+    t <- initial_MEM(nt, mix, data, exp(-w))
+    ot[3] <- Sys.time()
+    t <- MEM(data, t, w)
+    ot[4] <- Sys.time()
+    np <- select_points(t, mix$alpha, by)
+    # points_simplex(np, size = sum(np[1, ]), add = TRUE,
+    # col = "blue", pch = 19, cex = 0.65)
+    # Update mass of components
+    ot[5] <- Sys.time()
+    mix <- CNM(np, mix, data, w, by)
+    ot[6] <- Sys.time()
+    # Collapse support points
+    mix <- collapse_points(mix, data)
+    ot[7] <- Sys.time()
+    ll <- attr(mix, "ll")
+
+    time <- time + diff(ot)
+
+    # If log-likelihood is converge, then execute the algorithm one last time
+    # If log-likelihood is still converge after last time then break
+    if (ll <= ll.old + tol) {
+      if (tem == 100) {
+        convergence <- 0
+        break
+      }
+      if (tem == 5) tem <- 100
+    } else {
+      tem <- 5
+    }
+  }
+  t3 <- Sys.time()
+  if (verbose > 0) print_verbose(verbose, i, mix)
+  attr(mix, "ll") <- attr(mix$alpha, "logmbeta") <- NULL
+  # structure(list(num.iterations = i, convergence = convergence,
+  #                max.gradient = max(attr(np, "gradient")), ll = ll, mix = mix),
+  #           class = "cnmdm")
+  c(i, inip, nrow(mix$alpha), ll, max(attr(np, "gradient")),
+    t3 - t1, t3 - t2, t2 - t1, time / i)
+}
+
+# Overall algorithm
+cnmdm <- function(data, h, verbose = 0, by, maxit = 100, nt = 20, tol = 1e-4) {
+  if (!is.numeric(data)) data <- as.matrix(data)
+  attr(data, "log") <- pmax(log(data), log(1e-100))
+  if (missing(by)) by <- which.min(colSums(apply(data, 2, duplicated)))
+  # Initial the mixture
+  mix <- initial_dirichletmix(data, h, by)
+  inip <- nrow(mix$alpha)
+  convergence <- 1
+  tem <- 5
+  time <- rep(0, 6)
+  for (i in seq_len(maxit)) {
+    ot <- rep(0, 7)
     ll.old <- attr(mix, "ll")
     if (verbose > 0) print_verbose(verbose, i - 1, mix)
     # EM algorithm
@@ -454,7 +494,7 @@ cnmdm <- function(data, h, verbose = 0, maxit = 100, nt = 20, tol = 1e-4) {
     # no need combine support points in EM step
     # Expand new support points
     w <- ddirichletmix(data, mix, log = TRUE) # log f(x_i;G)
-    t <- rbind(mix$alpha, gmultinomix(nt, 1 / mix$h, data, exp(-w)) + 1)
+    t <- initial_MEM(nt, mix, data, exp(-w))
     t <- MEM(data, t, w)
     np <- select_points(t, mix$alpha, by)
     # points_simplex(np, size = sum(np[1, ]), add = TRUE,
@@ -478,7 +518,85 @@ cnmdm <- function(data, h, verbose = 0, maxit = 100, nt = 20, tol = 1e-4) {
     }
   }
   if (verbose > 0) print_verbose(verbose, i, mix)
+  attr(mix, "ll") <- attr(mix$alpha, "logmbeta") <- NULL
   structure(list(num.iterations = i, convergence = convergence,
                  max.gradient = max(attr(np, "gradient")), ll = ll, mix = mix),
             class = "cnmdm")
+}
+
+# Initial h can get from the Dirichlet distribution fit to the data
+initial_h <- function(x, maxit = 20, tol = 1e-3) {
+  # Or max(mu * (1 - mu) / diag(cov) - 1) by formula from data ??
+  logx <- attr(x, "log")
+  if (is.null(logx)) logx <- pmax(log(x), log(1e-100))
+  # if (is.null(logx)) logx <- log(x)
+  # logx[logx == -Inf] <- 0
+  elog <- colMeans(logx)
+  D <- length(elog)
+  a <- rep(2, D)
+  for (i in 1:maxit) {
+    logC <- digamma(sum(a)) - digamma(a) # Constant part in log
+    g <- logC + elog
+    negH <- diag(trigamma(a)) - trigamma(sum(a)) # -H
+    update <- solve(negH, g)
+    at <- a + update
+    if (any(at < 1)) {
+      lf <- (a - 1) / -update
+      lf <- lf[lf > 0] # Find all update < 0 and a < 1 after updating
+      at <- a + min(lf) / 2 * update
+    }
+    if (abs(sum(at) - sum(a)) < tol) break
+    a <- at
+  }
+  a0 <- sum(at)
+  1 / (a0 - D)
+}
+
+dmde <- function(data, bwf = 5:1 / 5, tol = 1e-4,
+                 criterion = c("AICc", "AIC", "BIC"),
+                 exhaustive = FALSE, verbose = 1, by, # exhaustive ???
+                 plot = FALSE) {
+  criterion <- match.arg(criterion)
+  bwf <- unique(sort(bwf))
+  k <- length(bwf)
+  ic <- double(k)
+  icmin <- Inf
+  names(icmin) <- criterion
+  n <- nrow(data) # sample size
+  D <- ncol(data) # dimension
+  if (missing(by)) by <- which.min(colSums(apply(data, 2, duplicated)))
+  H <- initial_h(data)
+  info <- matrix(nrow = k, ncol = 4,
+                 dimnames = list(1:k, c("bwf", "h", "ll", criterion)))
+  for (i in 1:k) {
+    ih <- H * bwf[k - i + 1]
+    r <- cnmdm(data, h = ih, by = by, tol = tol)
+    p <- D * nrow(r$mix$alpha) - 1 # (Dim - 1) * n_Comp + n_Comp - 1
+    ic[i] <- -2 * r$ll +
+      switch(criterion,
+             AICc = 2 * p + 2 * p * (p + 1) / max(n - p - 1, 0), # Inf ??
+             AIC = 2 * p,
+             BIC = log(n) * p)
+    info[i, ] <- c(bwf[k - i + 1], ih, r$ll, ic[i])
+    if (k == 1 || ic[i] < icmin) {
+      icmin <- ic[i]
+      imin <- i
+      mix <- r$mix
+      ll <- r$ll
+      maxgrad <- r$max.gradient
+    }
+    if (plot) pairs(r$mix, data)
+    if (verbose >= 1) {
+      cat("Iter.#", i,
+          ":\tbwf = ", sprintf("%.3f", bwf[k - i + 1]),
+          "\th = ", sprintf("%.3f", ih),
+          "\tll = ", r$ll, "\t", criterion, " = ", ic[i], "\n", sep = "")
+    }
+    if (verbose >= 2) print(r$mix)
+    if (ic[i] == Inf || !exhaustive && ic[i] >= icmin + 10) break
+  }
+  fit <- list(info = info[1:i, ], bwf = bwf[k - imin + 1],
+              maxgrad = maxgrad, ll = ll, criterion = icmin, mix = mix)
+  class(fit) <- "dmde"
+  fit
 }
