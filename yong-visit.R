@@ -139,7 +139,10 @@ f_hat_orth <- function(x, X, k, simplex = FALSE, show_m = FALSE) {
   ms <- ms[rowSums(ms) <= k, , drop = FALSE]
   even_ms <- apply(ms %% 2 == 0, 1, all)
   ms_even <- ms[even_ms, , drop = FALSE]
-  if (show_m) message("Number of even m's: ", nrow(ms_even))
+  if (show_m) {
+    message("Number of even m's: ", nrow(ms_even))
+    print(ms_even)
+  }
 
   # Estimate coefficients
   coefs_even <- numeric(nrow(ms_even))
@@ -173,6 +176,21 @@ f_hat_orth <- function(x, X, k, simplex = FALSE, show_m = FALSE) {
   return(f)
 
 }
+
+
+test_that("f_hat_orth approximates well a Dirichlet density", {
+
+  p <- 3
+  n <- 100
+  samp_simp <- rdirichlet(n = n, alpha = 1 + 1:p)
+  samp_unif_simp <- rdirichlet(n = 1e4, alpha = rep(1, p))
+  dens <- f_hat_orth(x = samp_unif_simp, X = samp_simp, k = 10,
+                         simplex = TRUE)
+  dens0 <- ddirichlet(x = samp_unif_simp, alpha = 1 + 1:p)
+  plot(samp_unif_simp[, -3], col = viridis(10)[cut(dens, breaks = 10)])
+  plot(samp_unif_simp[, -3], col = viridis(10)[cut(dens0, breaks = 10)])
+
+})
 
 test_that("f_hat_orth integrates one on the positive orthant of S^{p-1}", {
 
