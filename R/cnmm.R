@@ -293,13 +293,13 @@ initial_MEM <- function(n, mix, data, mass) {
 # Modal EM algorithm of the gradient function of
 # Dirichlet mixture's log-likelihood
 # a: alpha; w: log f(x_i; G)
-MEM <- function(data, a, w, plot = FALSE, tem = 5, tol = 1e-4) {
+MEM <- function(data, a, w, plot = FALSE, tem = 5, tol = 1e-4, axl = 100) {
   n <- nrow(data)
   size <- sum(a[1, ]) # Calulate by h ??
   if (plot) {
-    contour_gradient(data, w, size)
+    contour_gradient(data, w, size, axl = axl)
     points_simplex(a, size = size, add = TRUE,
-                   pch = 20, col = "gray50", cex = 0.6)
+                   pch = 20, col = "gray50", cex = 0.8)
   }
   # Plot contour of gradient of log-likelihood
   sg <- sg.old <- -Inf
@@ -325,7 +325,8 @@ MEM <- function(data, a, w, plot = FALSE, tem = 5, tol = 1e-4) {
     # Plot the tack of alpha from initial to local maximum of gradient function
     a.old <- a
   }
-  if (plot) points_simplex(a, size = size, add = TRUE, pch = 19, cex = 0.8)
+  if (plot) points_simplex(a, size = size, col = "blue",
+                           add = TRUE, pch = 19, cex = 0.8)
   # Final alpha after updating
   if (!convergence) {
     logd <- ddirichlet(data, a, log = TRUE, outer = TRUE) - w

@@ -35,10 +35,10 @@ simplexpanel(lab = list("Ag", "Se", "In"), labcex = 1.3)
 plot(f_cvkld, data = data, prop = TRUE,
      point = FALSE, mode = FALSE, drawlabels = TRUE,
      axl = axl, lv = lv, add = TRUE)
-points_simplex(maxbp, pch = 19,
-               col = transcols("#3A5FCD", 0.6), add = TRUE, cex = 1.1)
 points_simplex(attr(f_cvkld, "mode"), pch = 16,
                col = 2, add = TRUE, cex = 0.7)
+points_simplex(maxbp, pch = 19,
+               col = transcols("#3A5FCD", 0.7), add = TRUE, cex = 0.8)
 # dev.off()
 
 # Classification into two groups

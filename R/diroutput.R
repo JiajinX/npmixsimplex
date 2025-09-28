@@ -34,12 +34,11 @@ print.dirichletmix <- function(mix) {
 simplexpanel <- function(lab = list(expression(x[1]),
                                     expression(x[2]),
                                     expression(x[3])),
-                         right = FALSE, title = NULL,
-                         boundlty = 1, labcex = 1.3) {
+                         right = FALSE, title = NULL, faxis = 100,
+                         margin = 0.05, boundlty = 1, labcex = 1.3) {
   par(mar = rep(1, 4))
   liml <- 0.1
   labl <- 0.06
-  margin <- 0.05
   sidel <- ifelse(right, 1, 2 / sqrt(3))
   tcex <- 0.8
   labcex <- labcex
@@ -73,9 +72,9 @@ simplexpanel <- function(lab = list(expression(x[1]),
     segments(temp, gap, sidel - temp, gap, lty = 3, col = "grey")
     segments(temp, gap, 2 * temp, 0, lty = 3, col = "grey")
     segments(sidel - temp, gap, sidel - 2 * temp, 0, lty = 3, col = "grey")
-    text(temp - margin, gap, gap * 100, cex = tcex)
-    text(sidel - temp + margin, gap, (1 - gap) * 100, cex = tcex)
-    text(2 * temp, -margin, (1 - gap) * 100, cex = tcex)
+    text(temp - margin, gap, round(gap * faxis, 1), cex = tcex)
+    text(sidel - temp + margin, gap, round((1 - gap) * faxis, 1), cex = tcex)
+    text(2 * temp, -0.05, round((1 - gap) * faxis, 1), cex = tcex)
     # Draw equilateral triangle, labs, axis value and auxiliary line
   }
   segments(l[1, ], l[2, ], l[3, ], l[4, ], col = "grey50", lty = boundlty)
@@ -402,7 +401,7 @@ contour_gradient <- function(data, w, size, lv = NULL, axl = 100,
   dim(d) <- c(length(x1), length(x2))
 
   lab <- list(expression(alpha[1]), expression(alpha[2]), expression(alpha[3]))
-  simplexpanel(lab = lab)
+  simplexpanel(lab = lab, faxis = size, margin = 0.06)
   sidel <- 2 / sqrt(3)
   l1 <- 1 / size
   l2 <- l1 * sqrt(3)
@@ -416,6 +415,7 @@ contour_gradient <- function(data, w, size, lv = NULL, axl = 100,
           col = viridis::viridis(length(lv)), add = TRUE)
 }
 
+# Draw the classification boundary of two estimation on simplex
 contour_bondary <- function(est1, est2, prior, threshold = NULL,
                             ax1 = c(0, 2 / sqrt(3)), ax2 = c(0, 1),
                             axl = 100, level = 0,

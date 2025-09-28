@@ -53,7 +53,7 @@ logtime <- lapply(estime, log10)
 cols <- c("#3366CC", "#0099C6", "#FF9900",
           "#109618", "#990099", "#DC3912")
 cols <- transcols(cols, 0.5)
-# pdf(paste0(pth, "time.pdf"), width = 7, height = 6)
+pdf(paste0(pth, "time.pdf"), width = 7, height = 6)
 plot.new()
 plot.window(xlim = c(1.7, 6.3), ylim = c(-1, 4.3))
 axis(1, at = 2:6)
@@ -62,7 +62,7 @@ axis(2, at = seq(-1, 4, by = 1),
 abline(h = -1:5, col = "grey90", lwd = 0.8)
 abline(v = 2:7,  col = "grey90", lwd = 0.8)
 box()
-title(xlab = "d", ylab = "Time/seconds", cex.lab = 1.4)
+title(xlab = expression(italic(d)), ylab = "Time (seconds)", cex.lab = 1.4)
 for (i in seq_along(logtime)) {
   m <- colMeans(logtime[[i]])
   points(2:6, m, col = cols[i], pch = 16, cex = 1.2, lwd = 1.6)
@@ -72,7 +72,7 @@ legname <- names(logtime)
 legend("topleft", bg = NA, bty = "n", inset = c(0.02, 0.02),
        legend = legname, col = cols, pch = 16,
        lwd = 1.6, pt.cex = 1.2, lty = 1)
-# dev.off()
+dev.off()
 
 
 
