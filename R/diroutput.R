@@ -187,11 +187,9 @@ plot.dirichletmix <- function(mix, data = NULL,
         dp <- ddirichletmix(sdata, smix)
         d[i] <- colMeans(outer(dp, d[i], "<"))
         if (is.null(lv)) lv <- seq(10, 90, by = 20) / 100
-        lb <- paste0((1 - lv) * 100, "%")
-      } else if (is.null(lv)) { # Contour lines based on grid density value
-        lv <- quantile(d[i], probs = plev)
-        lb <- round(lv, 2)
-      }
+      } else if (is.null(lv)) lv <- quantile(d[i], probs = plev)
+      # Contour lines based on grid density value
+      lb <- if (prop) paste0((1 - lv) * 100, "%") else round(lv, 2)
       dim(d) <- c(axl, axl)
       if (is.null(col)) col <- viridis::viridis(length(lv))
       contour(ax2, ax1, d, levels = lv, labels = lb, labcex = labcex,

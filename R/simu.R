@@ -241,7 +241,7 @@ ms_model <- function(type = c("dirichlet", "chacon"),
     t1 <- Sys.time()
     f_plug <- ks::kde(idata) # KDE-ilr: Plug_in
     t2 <- Sys.time()
-    f_cv <- ks::kde(idata, H = Hlscv(idata)) # KDE-ilr: CV
+    f_cv <- ks::kde(idata, H = ks::Hlscv(idata)) # KDE-ilr: CV
     t3 <- Sys.time()
     f_kdir <- dirichletmix(a = data / hkdeDir(data) + 1) # KDE-Dir
     t4 <- Sys.time()

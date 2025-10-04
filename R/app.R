@@ -14,7 +14,7 @@ genemix <- function(n, mix) {
     x <- rdirichletmix(n, mix)
     y <- ilrtra(x)
   } else { # For Gaussian mixture (also for kde as special case)
-    y <- if (cls == "kde") rkde(n, mix) else rmvnormix(n, mix)
+    y <- if (cls == "kde") ks::rkde(n, mix) else rmvnormix(n, mix)
     x <- unclass(compositions::ilrInv(y))
   }
   jacb <- exp(rowSums(log(x))) * sqrt(ncol(x))
