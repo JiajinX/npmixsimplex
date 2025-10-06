@@ -22,92 +22,41 @@ initial_a0 <- function(x, maxit = 20, tol = 1e-3) {
   sum(at)
 }
 
-# dmde <- function(data, bwf = 5:1 / 5, tol = 1e-4, ictol = 10,
-#                  criterion = c("AICc","AIC","BIC"),
-#                  exhaustive = FALSE, verbose = 1, by,
-#                  plot = FALSE) {
-#   criterion <- match.arg(criterion)
-#   bwf <- unique(sort(bwf))
-#   k <- length(bwf)
-#   ic <- double(k)
-#   icmin <- Inf
-#   names(icmin) <- criterion
-#   n <- nrow(data) # sample size
-#   D <- ncol(data) # dimension
-#   if (missing(by)) by <- which.min(colSums(apply(data, 2, duplicated)))
-#   ia0 <- initial_a0(data) # Initial a0
-#   info <- matrix(nrow = k, ncol = 4,
-#                  dimnames = list(1:k, c("bwf", "h", "ll", criterion)))
-#   for (i in seq_len(k)) {
-#     h <- 1 / ((ia0 + 1) / bwf[k - i + 1]^2 - 1 - D)
-#     # a0 + 1 \propto 1 / sd^2
-#     r <- cnmdm(data, h = h, by = by, tol = tol)
-#     p <- D * nrow(r$mix$alpha) - 1 # (Dim - 1) * n_Comp + n_Comp - 1
-#     ic[i] <- -2 * r$ll +
-#       switch(criterion,
-#              AICc = {2 * p + 2 * p * (p + 1) / max(n - p - 1, 0)},
-#              AIC = {2 * p},
-#              BIC = {log(n) * p}
-#              )
-#     info[i, ] <- c(bwf[k - i + 1], h, r$ll, ic[i])
-#     if (k == 1 || ic[i] < icmin) {
-#       icmin <- ic[i]
-#       imin <- i
-#       mix <- r$mix
-#       ll <- r$ll
-#       maxgrad <- r$max.gradient
-#     }
-#     if (plot) pairs(r$mix, data)
-#     if (verbose >= 1) {
-#       cat("Iter.#", i,
-#           ":\tbwf = ", sprintf("%.3f", bwf[k - i + 1]),
-#           "\th = ", sprintf("%.3f", h),
-#           "\tll = ", r$ll, "\t", criterion, " = ", ic[i], "\n", sep = "")
-#     }
-#     if (verbose >= 2) print(r$mix)
-#     if (ic[i] == Inf || !exhaustive && ic[i] >= icmin + ictol) break
-#   }
-#
-#   fit <- list(info = info[1:i, ], bwf = bwf[k - imin + 1],
-#               maxgrad = maxgrad, ll = ll, criterion = icmin, mix = mix)
-#   class(fit) = "dmde"
-#   fit
-# }
-
-# Model selection under different bandwidth h
-gridsearch <- function(data, bwf, ia0, tol, ictol, criterion, by,
-                       exhaustive, verbose, plot, cinfo = NULL) {
-  n <- nrow(data) # sample size
-  D <- ncol(data) # dimension
-  icmin <- Inf
-  names(icmin) <- criterion
+dmde <- function(data, bwf = 10:1 / 10, tol = 1e-4, ictol = 10,
+                 criterion = c("AIC","AICc","BIC"),
+                 exhaustive = FALSE, verbose = 0, by,
+                 plot = FALSE) {
+  criterion <- match.arg(criterion)
+  bwf <- unique(sort(bwf, decreasing = TRUE))
+  if (missing(by)) by <- which.min(colSums(apply(data, 2, duplicated)))
   k <- length(bwf)
   ic <- double(k)
+  icmin <- Inf
+  names(icmin) <- criterion
+  n <- nrow(data) # sample size
+  D <- ncol(data) # dimension
+  d <- D - 1
+  volf <- bwf^(1/d)
+  ia0 <- initial_a0(data) # Initial a0
   info <- matrix(nrow = k, ncol = 4,
                  dimnames = list(1:k, c("bwf", "h", "ll", criterion)))
   for (i in seq_len(k)) {
-    if (!is.null(cinfo) && bwf[i] == cinfo$bwf) {
-      h <- cinfo$mix$h
-      r <- cinfo
-      ic[i] <- r$criterion
-    } else {
-      h <- 1 / ((ia0 + 1) / bwf[i]^2 - 1 - D) # a0 + 1 \propto 1 / sd^2
-      r <- cnmdm(data, h = h, by = by, tol = tol)
-      p <- D * nrow(r$mix$alpha) - 1 # (Dim - 1) * n_Comp + n_Comp - 1
-      # p <- 2 * nrow(r$mix$alpha) - 1
-      ic[i] <- -2 * r$ll +
-        switch(criterion,
-               AICc = {2 * p + 2 * p * (p + 1) / max(n - p - 1, 0)},
-               AIC = {2 * p},
-               BIC = {log(n) * p})
-    }
+    h <- 1 / ((ia0 + 1) / volf[i]^2 - 1 - D) # a0 + 1 \propto 1 / sd^2
+    r <- cnmdm(data, h = h, by = by, tol = tol)
+    p <- D * nrow(r$mix$alpha) - 1 # (Dim - 1) * n_Comp + n_Comp - 1
+    ic[i] <- -2 * r$ll +
+      switch(criterion,
+             AICc = {2 * p + 2 * p * (p + 1) / max(n - p - 1, 0)},
+             AIC = {2 * p},
+             BIC = {log(n) * p}
+             )
     info[i, ] <- c(bwf[i], h, r$ll, ic[i])
     if (k == 1 || ic[i] < icmin) {
       icmin <- ic[i]
       imin <- i
       mix <- r$mix
       ll <- r$ll
-      maxgrad <- r$maxgrad
+      maxgrad <- r$max.gradient
     }
     if (plot) pairs(r$mix, data)
     if (verbose >= 1) {
@@ -119,47 +68,11 @@ gridsearch <- function(data, bwf, ia0, tol, ictol, criterion, by,
     if (verbose >= 2) print(r$mix)
     if (ic[i] == Inf || !exhaustive && ic[i] >= icmin + ictol) break
   }
-  list(info = info[1:i, ], imin = imin, bwf = bwf[imin],
-       maxgrad = maxgrad, ll = ll, criterion = icmin, mix = mix)
-}
 
-dmde <- function(data, bwf = 5:1 / 5, tol = 1e-4, ictol = 10, window = 0,
-                 criterion = c("AIC", "AICc", "BIC"),
-                 exhaustive = FALSE, verbose = 0, by = NULL,
-                 plot = FALSE) {
-  criterion <- match.arg(criterion)
-  bwf <- unique(sort(bwf, decreasing = TRUE))
-  if (is.null(by)) by <- which.min(colSums(apply(data, 2, duplicated)))
-  ia0 <- initial_a0(data) # Initial a0
-  res <- gridsearch(data, bwf, ia0, tol, ictol, criterion,
-                    by = by, exhaustive = exhaustive,
-                    verbose = verbose, plot = plot)
-  # Reduce the search range of grid, create a smaller bandwidth range
-  if (window > 0) {
-    imin <- res$imin
-    bwfmin <- bwf[res$imin]
-    start <- if (imin == 1) bwfmin else bwf[imin - 1]
-    end <- if (imin == length(bwf)) { # If imin is the last value of bwf
-      if (bwfmin < 0.1) bwfmin else 0.1
-    } else bwf[imin + 1]
-    if (verbose >= 1) cat("Search in the bwf from", start, "to", end, ":\n")
-    bwf_left <- if (start != bwfmin) {
-      seq(start, bwfmin, len = window + 2)[-1]
-    } else NULL
-    bwf_right <- if (end != bwfmin) {
-      seq(bwfmin, end, len = window + 2)[2:(window + 1)]
-    } else NULL
-    bwf <- c(bwf_left, bwf_right)
-    rwind <- gridsearch(data, bwf, ia0, tol, ictol, criterion,
-                        by = by, exhaustive = exhaustive,
-                        verbose = verbose, plot = plot, cinfo = res)
-    info <- rbind(res$info, rwind$info[-(window + 1), ])
-    info <- info[order(info[, "bwf"], decreasing = TRUE), ]
-    rwind$info <- info
-  } else rwind <- res # If window = 1
-  rwind$imin <- NULL
-  class(rwind) <- "dmde"
-  rwind
+  fit <- list(info = info[1:i, ], bwf = bwf[imin],
+              maxgrad = maxgrad, ll = ll, criterion = icmin, mix = mix)
+  class(fit) = "dmde"
+  fit
 }
 
 # Calculate CVISE and CVKLD for different bandwidth
@@ -189,8 +102,9 @@ CVfold <- function(train, test, bw, nsamp = 1e5,
 # Model selection with CVISE and CVKLD
 dmdeCV <- function(data, k = 5, bwf = 10:1 / 10, verbose = 0) {
   D <- ncol(data)
+  d <- D - 1
   ia0 <- initial_a0(data) # Initial of a0
-  bw <- 1 / ((ia0 + 1) / bwf^2 - 1 - D)
+  bw <- 1 / ((ia0 + 1) / bwf^(2/d) - 1 - D)
   # Bandwidth candidates by initial a0 and bandwidth factor
   fold <- sample(rep(1:k, length.out = nrow(data))) # Split data into k-folds
   cvise <- matrix(nrow = k, ncol = length(bwf))
