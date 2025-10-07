@@ -103,15 +103,15 @@ Dir_mix <- function(no, D = 3) {
               # 1.
               list(mu = rep(1, 3) / 3, pr = 1, h = 0.1), # Centered
               # 2.
-              list(mu = c(0, 0.3, 0.7),  pr = 1, h = 0.25), # Boundary
+              list(mu = c(0, 0.3, 0.7),  pr = 1, h = 0.05), # Boundary
               # 3.
-              list(mu = c(0, 0, 1),  pr = 1, h = 0.2), # Cornered
+              list(mu = c(0, 0, 1),  pr = 1, h = 0.5), # Cornered
               # 4.
               list(mu = rbind(c(0.5, 0.3, 0.2), c(0.2, 0.3, 0.5)),
                    pr = rep(1, 2) / 2, h = 0.05), # Bimodal
               # 5.
               list(mu = rbind(c(0.02, 0.8, 0.18), c(0.65, 0, 0.35), c(0, 0, 1)),
-                   pr = c(1, 5, 12) / 18, h = 0.15), # Separated Trimodal
+                   pr = c(1, 5, 12) / 18, h = 0.03), # Separated Trimodal
               # 6.
               {
                 i <- 1:6
@@ -120,37 +120,37 @@ Dir_mix <- function(no, D = 3) {
                 r <- 1 - x1
                 mu <- cbind(x1, r * x1, r^2)
                 colnames(mu) <- NULL
-                list(mu = mu, pr = rep(1, l) / l, h = 0.2)
+                list(mu = mu, pr = rep(1, l) / l, h = 0.1)
               },
 
               # Different bandwidth
               # 7.
               list(mu = rbind(c(0.8, 0, 0.2), c(0.6, 0.4, 0)),
-                   pr = c(0.3, 0.7), h = c(0.1, 0.2)),
+                   pr = c(0.3, 0.7), h = c(0.02, 0.1)),
               # 8.
               list(mu = rbind(c(1/3, 1/3 + 0.08, 1/3 - 0.08),
                               c(1/3, 0.1, 0.9 - 1/3),
                               c(1/3 - 0.2, 1/3 + 0.18, 1/3 + 0.02),
                               c(0.44, 0.42, 0.14)),
-                   pr = c(3, 7, 4, 1) / 15, h = c(0.1, 0.05, 0.035, 0.04)),
+                   pr = c(3, 7, 4, 1) / 15, h = c(0.1, 0.01, 0.004, 0.001)),
               # 9.
               list(mu = rbind(c(1, 0, 0), c(0.01, 0.98, 0.01), c(0, 0.01, 0.99),
                               c(0, 0.5, 0.5), c(0.3, 0, 0.7), c(0.6, 0.4, 0)),
                    pr = c(rep(0.4 / 3, 3), rep(0.6 / 3, 3)),
-                   h = c(0.2, 0.1, 0.06, 0.06, 0.2, 0.1)),
+                   h = c(0.3, 0.1, 0.01, 0.05, 0.3, 0.01)),
               # 10.
               {
-                i <- 1:4
+                i <- 1:6
                 l <- length(i)
-                x1 <- i / l * 0.6
+                x1 <- i / l * 0.8
                 xr <- 1 - x1
                 xmu <- cbind(x1, xr * 1 / 8, xr * 7 / 8)
-                y1 <- i / l * 0.3
+                y1 <- i / l * 0.5
                 yr <- 1 - y1
                 ymu <- cbind(y1, yr * 9 / 10, yr * 1 / 10)
                 colnames(xmu) <- colnames(ymu) <- NULL
                 list(mu = rbind(xmu, ymu), pr = rep(1, 2 * l) / (2 * l),
-                     h = c(0.5 * rev(x1), rev(y1)))
+                     h = c(0.2 * rev(x1), 0.4 * rev(y1)))
               },
               # 11.
               {
@@ -165,27 +165,28 @@ Dir_mix <- function(no, D = 3) {
                 colnames(xmu) <- colnames(ymu) <- NULL
                 list(mu = rbind(xmu, ymu),
                      pr = c(rep(0.45 / l, l), rep(0.55 / l, l)),
-                     h = c(sqrt(x1) * 0.2, sqrt(rev(x1)) * 0.15))
+                     h = c(sqrt(x1) * 0.1, sqrt(rev(x1)) * 0.1))
               },
               # 12.
               {
-                lx <- 3
-                x3 <- seq(1/3, 1, len = lx)
-                xmu <- cbind(1 - x3, x3, 0)
-                i <- 1:4
+                lx <- 7
+                x3 <- seq(0, 1, len = lx)
+                xmu <- cbind(0, 1 - x3, x3)
+                i <- 1:6
                 li <- length(i)
                 y1 <- i / li
                 ry <- 1 - y1
                 ymu <- cbind(y1, ry * y1, ry^2)
-                z <- ymu[1, ] / 2
-                zmu <- c(z[1], 1 - z[1] - z[3], z[3])
-                colnames(xmu) <- colnames(ymu) <- rownames(zmu) <- NULL
+                zmu <- rbind(c(0.25, 0.75, 0), c(0.75, 0.25, 0), c(0.9, 0, 0.1),
+                             c(0.25, 0.5, 0.25), c(0.39, 0.05, 0.56))
+                colnames(xmu) <- colnames(ymu) <- NULL
                 list(mu = rbind(xmu, ymu, zmu),
-                     pr = c(rep(0.25 / lx, lx), rep(0.6 / li, li), 0.15),
-                     h = c(seq(13, by = -3, len = lx),
-                           seq(10, by = -1.6, len = li), 6) / 100)
+                     pr = c(rep(0.3 / lx, lx), rep(0.45 / li, li),
+                            rep(0.25 / 5, 5)),
+                     h = c(seq(13, by = -3, len = 5), 5, 9,
+                           seq(10, by = -1.6, len = li),
+                           10, 5, 5, 2, 0.5) / 100)
               }
-
   )
   if (D > 3) {
     if (is.vector(p$mu)) p$mu <- t(p$mu)
@@ -196,18 +197,15 @@ Dir_mix <- function(no, D = 3) {
   dirichletmix(a = p$mu / p$h + 1, pr = p$pr)
 }
 
-plotestmix <- function(type = c("chacon", "dirichlet"), no = 1:12,
-                       prop = FALSE) {
+plotestmix <- function(type = c("chacon", "dirichlet"), no = 1:12) {
   type <- match.arg(type)
   n <- length(no)
   old_par <- par(no.readonly = TRUE)
   par(mfrow = c(ceiling(n / 4), 4))
   for (i in no) {
-    mix0 <- if(type == "chacon") chaconmix(i) else Dir_mix(i)
-    if (prop) data <- genemix(1000, mix0)
-    ifelse(type == "chacon",
-           contour_r2s(mix0, data, prop = prop),
-           plot(mix0, data, prop = prop))
+    switch(type,
+           chacon = contour_r2s(chaconmix(i)),
+           dirichlet = plot(Dir_mix(i)))
   }
   par(old_par)
 }
@@ -222,13 +220,13 @@ plotestmix <- function(type = c("chacon", "dirichlet"), no = 1:12,
 ms_model <- function(type = c("dirichlet", "chacon"),
                      no, D = 3, n = 100, samp = 1e4, rep = 1) {
   type <- match.arg(type)
-  cn <- c("no", "ilr-PI", "ilr-CV", "ilr-MDE",
-          "Dir-KDE", "Dir-AIC", "Dir-CVISE", "Dir-CVKLD") # test estimators
+  cn <- c("no", "ilr-PI", "ilr-CV", "Dir-KDE",
+          "ilr-MDE", "Dir-AIC", "Dir-CVISE", "Dir-CVKLD") # test estimators
   nest <- length(cn)
   miae <- matrix(nrow = rep, ncol = nest)
   colnames(miae) <- cn
   tm <- kld <- miseR <- miae
-  tm <- tm[, -nest, drop = FALSE]
+  tm <- tm[, -nest]
   colnames(tm)[nest - 1] <- "Dir-CV"
   mix0 <- switch(type,
                  chacon = chaconmix(no, D = D - 1),
@@ -239,26 +237,26 @@ ms_model <- function(type = c("dirichlet", "chacon"),
     print(i)
     data <- genemix(n, mix0)
     idata <- attr(data, "ilr")
-
+    # KDE
     t1 <- Sys.time()
     f_plug <- ks::kde(idata) # KDE-ilr: Plug_in
     t2 <- Sys.time()
     f_cv <- ks::kde(idata, H = ks::Hlscv(idata)) # KDE-ilr: CV
     t3 <- Sys.time()
-    f_imde <- npden::mmde(idata, 10:1 / 10)$mix # MDE-ilr
-    t4 <- Sys.time()
-
     f_kdir <- dirichletmix(a = data / hkdeDir(data) + 1) # KDE-Dir
+    t4 <- Sys.time()
+    # MDE
+    f_imde <- npden::mmde(idata, 10:1 / 10)$mix # MDE-ilr
     t5 <- Sys.time()
-    f_dmde <- dmde(data, ictol = 40)$mix
+    f_dmde <- dmde(data, 10:1 / 10)$mix
     t6 <- Sys.time()
     recv <- dmdeCV(data)
     t7 <- Sys.time()
     f_cvise <- recv$mix_ise$mix
     f_cvkl <- recv$mix_kl$mix
 
-    ftotal <- list(f_plug = f_plug, f_cv = f_cv, f_imde = f_imde,
-                   f_kdir = f_kdir, f_dmde = f_dmde,
+    ftotal <- list(f_plug = f_plug, f_cv = f_cv, f_kdir = f_kdir,
+                   f_imde = f_imde, f_dmde = f_dmde,
                    f_cvise = f_cvise, f_cvkl = f_cvkl)
     ielst <- lapply(ftotal, function(f) IE(mix0_ie, f))
     miae[i, ] <- c(no, sapply(ielst, `[[`, "iae")) # IAE,
