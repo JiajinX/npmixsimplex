@@ -243,7 +243,7 @@ ms_model <- function(type = c("dirichlet", "chacon"),
     t1 <- Sys.time()
     f_plug <- ks::kde(idata) # KDE-ilr: Plug_in
     t2 <- Sys.time()
-    f_cv <- ks::kde(idata, H = ks::Hlscv(idata)) # KDE-ilr: CV
+    f_cv <- ks::kde(idata, H = Hlscv(idata)) # KDE-ilr: CV
     t3 <- Sys.time()
     f_imde <- npden::mmde(idata, 10:1 / 10)$mix # MDE-ilr
     t4 <- Sys.time()

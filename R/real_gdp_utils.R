@@ -63,7 +63,7 @@ ms_gdp <- function(mix0, n, threshold, shift, samp = 1e4, rep = 1) {
       isdata <- attr(sdata, "ilr")
 
       f_plug <- ks::kde(isdata) # KDE-ilr: Plug_in
-      f_cv <- ks::kde(isdata, H = ks::Hlscv(isdata)) # KDE-ilr: CV
+      f_cv <- ks::kde(isdata, H = Hlscv(isdata)) # KDE-ilr: CV
       f_imde <- npden::mmde(isdata, 10:1 / 10)$mix # MDE-ilr
     }
 
