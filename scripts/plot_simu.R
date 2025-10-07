@@ -48,12 +48,17 @@ for (i in 1:12) {
 }
 
 # Simulation time
-estime <- readRDS("results/raw/simulation/estime")
-logtime <- lapply(estime, log10)
+estm <- readRDS("results/raw/simulation/estime_pc")
+mutm <- aggregate(estm[, -1, drop = FALSE],
+                  by = list(group = estm[, 1]),
+                  FUN = mean)
+mutm <- t(mutm)[-1, ]
+colnames(mutm) <- paste0("d", 3:7)
+logtm <- log10(mutm)
 cols <- c("#3366CC", "#0099C6", "#FF9900",
           "#109618", "#990099", "#DC3912")
 cols <- transcols(cols, 0.5)
-pdf(paste0(pth, "time.pdf"), width = 7, height = 6)
+# pdf(paste0(pth, "time.pdf"), width = 7, height = 6)
 plot.new()
 plot.window(xlim = c(1.7, 6.3), ylim = c(-1, 4.3))
 axis(1, at = 2:6)
@@ -63,16 +68,16 @@ abline(h = -1:5, col = "grey90", lwd = 0.8)
 abline(v = 2:7,  col = "grey90", lwd = 0.8)
 box()
 title(xlab = expression(italic(d)), ylab = "Time (seconds)", cex.lab = 1.4)
-for (i in seq_along(logtime)) {
-  m <- colMeans(logtime[[i]])
+for (i in seq_len(nrow(logtm))) {
+  m <- logtm[i, ]
   points(2:6, m, col = cols[i], pch = 16, cex = 1.2, lwd = 1.6)
-  lines(2:6, m, col = cols[i], lwd = 1.6)
+  lines(2:6, m, col = cols[i], type = "c", lwd = 1.6)
 }
-legname <- names(logtime)
+legname <- rownames(logtm)
 legend("topleft", bg = NA, bty = "n", inset = c(0.02, 0.02),
        legend = legname, col = cols, pch = 16,
        lwd = 1.6, pt.cex = 1.2, lty = 1)
-dev.off()
+# dev.off()
 
 
 

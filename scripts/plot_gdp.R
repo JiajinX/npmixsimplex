@@ -23,9 +23,12 @@ maxbp <- gd[which.max(dbound), ] # Grid point with max density
 
 # Scatter plot of GDP compositions
 # pdf(paste0(pth, "GDPdot.pdf"), width = 6, height = 5)
+zero <- rowSums(gdp[, -1] == 0) > 0
 simplexpanel(lab = list("Ag", "Se", "In"), labcex = 1.3)
-points_simplex(gdp[, -1], pch = 20,
+points_simplex(gdp[!zero, -1], pch = 20,
                col = transcols("#8C8C8C", 0.5), add = TRUE, cex = 1)
+points_simplex(gdp[zero, -1], pch = 20,
+               col = transcols("#FF0000", 0.5), add = TRUE, cex = 1)
 # dev.off()
 
 # Density contour plot for GDP compositions (without 0) by Dir-CVKLD
@@ -36,9 +39,9 @@ plot(f_cvkld, data = data, prop = TRUE,
      point = FALSE, mode = FALSE, drawlabels = TRUE,
      axl = axl, lv = lv, add = TRUE)
 points_simplex(attr(f_cvkld, "mode"), pch = 16,
-               col = 2, add = TRUE, cex = 0.7)
+               col = 2, add = TRUE, cex = 0.8)
 points_simplex(maxbp, pch = 19,
-               col = transcols("#3A5FCD", 0.7), add = TRUE, cex = 0.8)
+               col = transcols("#3A5FCD", 0.8), add = TRUE, cex = 0.8)
 # dev.off()
 
 # Classification into two groups
@@ -52,17 +55,15 @@ prior <- c(nl, nh) / (nl + nh)
 mdl <- dmdeCV(gdpl, bwf = 10:1 / 10, verbose = 1)$mix_kl$mix
 mdh <- dmdeCV(gdph, bwf = 10:1 / 10, verbose = 1)$mix_kl$mix
 # pdf(paste0(pth, "GDPcls.pdf"), width = 6, height = 5)
-plev = seq(0.9, 0.99, len = 3)
 cls_income(gdp_income, pch = 20, cex = 0.8, alpha = 0.5)
-plot(mdl, point = FALSE, mode = FALSE, drawlabels = TRUE, plev = plev,
-     col = transcols("#756142", 0.8), axl = axl, add = TRUE, labcex = 0.8,
-     scale = prior[1])
-plot(mdh, point = FALSE, mode = FALSE, drawlabels = TRUE, plev = plev,
-     col = transcols("#454975", 0.8), axl = axl, add = TRUE, labcex = 0.8,
-     scale = prior[2])
+plot(mdl, point = FALSE, mode = FALSE, drawlabels = TRUE,
+     lv = c(2.7, 3.6, 4.4), col = transcols("#756142", 0.8),
+     axl = axl, add = TRUE, labcex = 0.8, scale = prior[1])
+plot(mdh, point = FALSE, mode = FALSE, drawlabels = TRUE,
+     lv = c(2.7, 3.6, 7, 24), col = transcols("#454975", 0.8),
+     axl = axl, add = TRUE, labcex = 0.8, scale = prior[2])
 contour_bondary(mdl, mdh, prior = prior, add = TRUE,
-                ax1 = c(0.4, 2 / sqrt(3) - 0.1), ax2 = c(0, 0.15),
-                lty = 2, lwd = 2)
+                ax1 = c(0.4, 2 / sqrt(3) - 0.1), ax2 = c(0, 0.15), lwd = 1)
 # dev.off()
 
 
