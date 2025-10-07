@@ -1,0 +1,57 @@
+invisible(lapply(dir("R", full.names = TRUE), source))
+library(npden)
+
+ms_time <- function(type = c("dirichlet", "chacon"), no, D = 3, n = 500) {
+  type <- match.arg(type)
+  mix0 <- switch(type,
+                 chacon = chaconmix(no, D = D - 1),
+                 dirichlet = Dir_mix(no, D = D))
+
+  data <- genemix(n, mix0)
+  idata <- attr(data, "ilr")
+  # KDE
+  t1 <- Sys.time()
+  f_plug <- ks::kde(idata) # KDE-ilr: Plug_in
+  print("ilr-PI")
+  t2 <- Sys.time()
+  f_cv <- ks::kde(idata, H = ks::Hlscv(idata)) # KDE-ilr: CV
+  print("ilr-CV")
+  t3 <- Sys.time()
+  f_imde <- npden::mmde(idata, 10:1 / 10)$mix # MDE-ilr
+  print("ilr-MDE")
+  t4 <- Sys.time()
+  f_kdir <- dirichletmix(a = data / hkdeDir(data) + 1) # KDE-Dir
+  print("Dir-KDE")
+  t5 <- Sys.time()
+  f_dmde <- dmde(data, 10:1 / 10)$mix
+  print("Dir-AIC")
+  t6 <- Sys.time()
+  recv <- dmdeCV(data)
+  print("Dir-CV")
+  t7 <- Sys.time()
+
+  tm <- c(no, n, D, diff(c(t1, t2, t3, t4, t5, t6, t7)))
+  names(tm) <- c("no", "n", "D", "ilr-PI", "ilr-CV", "ilr-MDE",
+                 "Dir-KDE", "Dir-AIC", "Dir-CV")
+  tm
+}
+
+tm <- ms_time(type = "chacon", no = 10, D = 3)
+print(tm)
+saveRDS(tm, "time3D")
+tm <- ms_time(type = "chacon", no = 10, D = 4)
+print(tm)
+saveRDS(tm, "time4D")
+tm <- ms_time(type = "chacon", no = 10, D = 5)
+print(tm)
+saveRDS(tm, "time5D")
+tm <- ms_time(type = "chacon", no = 10, D = 6)
+print(tm)
+saveRDS(tm, "time6D")
+tm <- ms_time(type = "chacon", no = 10, D = 7)
+print(tm)
+saveRDS(tm, "time7D")
+
+tm <- readRDS("results/raw/simulation/estime_pc")
+
+

@@ -1,0 +1,24 @@
+mix0 <- Dir_mix(12)
+data <- genemix(500, mix0)
+re <- dmde(data, bwf = 10:1/10, verbose = T)
+plot(re$mix, data = data, prop = T)
+
+mix1 <- dirichletmix(a = rep(5,3))
+data <- genemix(500, mix1)
+plot(mix1, data, prop = T)
+mix2 <- dirichletmix(a = rep(10,3))
+data <- genemix(500, mix2)
+plot(mix2, data, prop = T)
+
+a01 <- 15
+a02 <- 30
+
+no <- 8
+D = 6
+mix0 <- Dir_mix(no, D = D)
+ra <- range(rowSums(mix0$alpha))
+((ra[1] + 1) / (ra[2] + 1))^(D/2)
+
+mix0 <- Dir_mix(no)
+data <- genemix(1000, mix0)
+plot(mix0, data, prop = T, mode = T, axl = 300)
