@@ -1,6 +1,6 @@
 ## Overview
 
-Companion package for the article *Density estimation for compositional data using nonparametric mixtures*, including:
+Companion package for the article *Density estimation for compositional data using nonparametric mixtures* (Xie, Wang, and García-Portugués, 2026), including:
 
 -   simulation
 -   real data application
